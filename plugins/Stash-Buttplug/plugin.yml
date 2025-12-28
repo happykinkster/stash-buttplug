@@ -12,7 +12,7 @@ ui:
       - ws://localhost:12345
       - ws://127.0.0.1:12345
 
-exec: [python, "{pluginDir}/bridge.py"]
+exec: [python3, "{pluginDir}/bridge.py"]
 interface: raw
 
 tasks:

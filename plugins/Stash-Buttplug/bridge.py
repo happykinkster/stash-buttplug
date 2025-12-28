@@ -13,6 +13,12 @@ sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 def log(msg):
     # Log to stderr so it shows up in StashApp logs
     print(f"[Buttplug] {msg}", file=sys.stderr)
+    try:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        log_file = os.path.join(script_dir, "bridge_debug.log")
+        with open(log_file, "a") as f:
+            f.write(f"{msg}\n")
+    except: pass
 
 log(f"Task started. CWD: {os.getcwd()}")
 
