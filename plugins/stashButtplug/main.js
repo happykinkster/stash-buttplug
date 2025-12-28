@@ -278,6 +278,50 @@
 
 
 
+    // 5. Funscript Loader (Direct URL)
+    async function loadFunscript() {
+        const matches = window.location.pathname.match(/\/scenes\/(\d+)/);
+        if (!matches) {
+            currentScript = null;
+            return;
+        }
+        const sceneId = matches[1];
+        const scriptUrl = `/scene/${sceneId}/funscript`;
+
+        try {
+            console.log(`stashButtplug: Fetching funscript from ${scriptUrl}`);
+            const req = await fetch(scriptUrl);
+
+            if (req.status !== 200) {
+                console.log(`stashButtplug: No funscript found (Status ${req.status}).`);
+                currentScript = null;
+                return;
+            }
+
+            const mainScript = await req.json();
+
+            if (!mainScript.actions || !Array.isArray(mainScript.actions)) {
+                console.error("stashButtplug: Invalid funscript format.", mainScript);
+                currentScript = null;
+                return;
+            }
+
+            // Direct URL only provides the main script.
+            // We explicitely set vibrate/rotate to null to trigger internal fallback logic.
+            currentScript = {
+                main: mainScript,
+                vibrate: null,
+                rotate: null
+            };
+
+            console.log(`stashButtplug: Loaded Main Script (${mainScript.actions.length} actions). Fallbacks enabled.`);
+
+        } catch (e) {
+            console.error("stashButtplug: Exception loading funscript", e);
+            currentScript = null;
+        }
+    }
+
     function updateIndex(script, idx, time) {
         if (!script) return 0;
         let i = idx;
