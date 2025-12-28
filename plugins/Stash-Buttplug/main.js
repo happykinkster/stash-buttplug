@@ -1,4 +1,3 @@
-
 (async function () {
     console.log("Stash-Buttplug: Loading...");
 
@@ -15,8 +14,15 @@
 
     // 2. Global State
     let client = null;
-    let currentScript = null; // { actions: [] }
-    let scriptIndex = 0;
+    let currentScript = null; // Object: { main: script, vibrate: script, rotate: script }
+
+    // State for indices
+    let state = {
+        mainIdx: 0,
+        vibeIdx: 0,
+        rotateIdx: 0
+    };
+
     let videoEl = null;
 
     // Default Config
@@ -25,10 +31,9 @@
         latency: 0,
         autoConnect: false,
         debug: false,
-        // New Device Settings
-        enableStroker: true,
-        enableVibrator: true,
-        enableRotator: true,
+        // Fallback Configuration
+        fallbackVibration: true, // Use stroke speed for vibration if no vibrate script
+        fallbackRotation: true,  // Use stroke speed for rotation if no rotate script
         vibeIntensity: 100, // %
         rotateIntensity: 100 // %
     };
@@ -87,31 +92,26 @@
                 </div>
 
                  <hr style="background:#555; margin: 15px 0;">
-                 <h5 style="margin-bottom:10px;">Device Control</h5>
+                 <h5 style="margin-bottom:10px;">Fallback Behavior</h5>
+                 <p style="font-size:0.8em; color:#aaa;">If specific scripts (e.g. .vibrate.funscript) are missing, should we generate commands from the main script?</p>
 
-                <!-- Stroker -->
-                <div class="form-check" style="margin-bottom:10px;">
-                    <input type="checkbox" id="bp-in-stroker" ${config.enableStroker ? 'checked' : ''}> 
-                    <label for="bp-in-stroker" style="display:inline; margin-left:5px;">Enable Stroker (Linear)</label>
-                </div>
-
-                <!-- Vibrator -->
+                <!-- Fallback Vibrator -->
                 <div class="form-check" style="margin-bottom:5px;">
-                    <input type="checkbox" id="bp-in-vibe" ${config.enableVibrator ? 'checked' : ''}> 
-                    <label for="bp-in-vibe" style="display:inline; margin-left:5px;">Enable Vibrator</label>
+                    <input type="checkbox" id="bp-in-fb-vibe" ${config.fallbackVibration ? 'checked' : ''}> 
+                    <label for="bp-in-fb-vibe" style="display:inline; margin-left:5px;">Fallback Vibration</label>
                 </div>
                 <div style="margin-left: 20px; margin-bottom:10px;">
-                    <label style="font-size:0.8em; color:#aaa;">Intensity Scale: <span id="bp-val-vibe">${config.vibeIntensity}</span>%</label>
+                    <label style="font-size:0.8em; color:#aaa;">Max Intensity: <span id="bp-val-vibe">${config.vibeIntensity}</span>%</label>
                     <input type="range" id="bp-in-vibe-val" min="10" max="100" value="${config.vibeIntensity}" style="width:100%;">
                 </div>
 
-                <!-- Rotator -->
+                <!-- Fallback Rotator -->
                 <div class="form-check" style="margin-bottom:5px;">
-                    <input type="checkbox" id="bp-in-rotate" ${config.enableRotator ? 'checked' : ''}> 
-                    <label for="bp-in-rotate" style="display:inline; margin-left:5px;">Enable Rotator</label>
+                    <input type="checkbox" id="bp-in-fb-rotate" ${config.fallbackRotation ? 'checked' : ''}> 
+                    <label for="bp-in-fb-rotate" style="display:inline; margin-left:5px;">Fallback Rotation</label>
                 </div>
                  <div style="margin-left: 20px; margin-bottom:15px;">
-                    <label style="font-size:0.8em; color:#aaa;">Speed Scale: <span id="bp-val-rotate">${config.rotateIntensity}</span>%</label>
+                    <label style="font-size:0.8em; color:#aaa;">Max Speed: <span id="bp-val-rotate">${config.rotateIntensity}</span>%</label>
                     <input type="range" id="bp-in-rotate-val" min="10" max="100" value="${config.rotateIntensity}" style="width:100%;">
                 </div>
 
@@ -146,9 +146,8 @@
             config.autoConnect = document.getElementById('bp-in-auto').checked;
 
             // New settings
-            config.enableStroker = document.getElementById('bp-in-stroker').checked;
-            config.enableVibrator = document.getElementById('bp-in-vibe').checked;
-            config.enableRotator = document.getElementById('bp-in-rotate').checked;
+            config.fallbackVibration = document.getElementById('bp-in-fb-vibe').checked;
+            config.fallbackRotation = document.getElementById('bp-in-fb-rotate').checked;
             config.vibeIntensity = parseInt(document.getElementById('bp-in-vibe-val').value) || 100;
             config.rotateIntensity = parseInt(document.getElementById('bp-in-rotate-val').value) || 100;
 
@@ -157,8 +156,7 @@
         };
         document.getElementById('bp-btn-cancel').onclick = () => {
             document.getElementById('bp-settings-modal').style.display = 'none';
-        }
-
+        };
 
         // Container
         const container = document.createElement('li');
@@ -189,9 +187,8 @@
             document.getElementById('bp-in-auto').checked = config.autoConnect;
 
             // Populate New settings
-            document.getElementById('bp-in-stroker').checked = config.enableStroker !== false;
-            document.getElementById('bp-in-vibe').checked = config.enableVibrator !== false;
-            document.getElementById('bp-in-rotate').checked = config.enableRotator !== false;
+            document.getElementById('bp-in-fb-vibe').checked = config.fallbackVibration;
+            document.getElementById('bp-in-fb-rotate').checked = config.fallbackRotation;
 
             document.getElementById('bp-in-vibe-val').value = config.vibeIntensity || 100;
             document.getElementById('bp-val-vibe').innerText = config.vibeIntensity || 100;
@@ -234,8 +231,6 @@
             } catch (e) {
                 console.error(e);
                 status.innerText = 'Err';
-                // Only alert on manual attempt?
-                // alert("Could not connect.");
             }
         }
     }
@@ -261,26 +256,11 @@
         }
     }
 
-    // 5. Funscript Loader (via Plugin Task)
-    async function loadFunscript() {
-        const matches = window.location.pathname.match(/\/scenes\/(\d+)/);
-        if (!matches) {
-            currentScript = null;
-            return;
-        }
-        const sceneId = matches[1];
-
-        const path = await getScenePath(sceneId);
-        if (!path) {
-            currentScript = null;
-            return;
-        }
-
-        // Run Plugin Task via GraphQL
+    // Helper to fetch and parse a specific script file
+    async function fetchScript(path) {
         const query = `mutation RunTask($plugin_id: ID!, $task_name: String!, $args: [PluginArgInput!]) {
             runPluginTask(plugin_id: $plugin_id, task_name: $task_name, args: $args)
         }`;
-
         const variables = {
             plugin_id: "Stash-Buttplug",
             task_name: "GetFunscript",
@@ -294,48 +274,73 @@
                 body: JSON.stringify({ query, variables })
             });
             const res = await req.json();
+            if (res.errors || !res.data?.runPluginTask) return null;
 
-            if (res.errors) {
-                console.error("Stash-Buttplug: Task Error", JSON.stringify(res.errors));
-                return;
-            }
+            const output = JSON.parse(res.data.runPluginTask);
+            if (output.error || !output.content) return null;
 
-            // Task returns a string (the output of the script)
-            const taskResult = res.data?.runPluginTask;
-            if (!taskResult) {
-                console.warn("Stash-Buttplug: No content returned from task");
-                return;
-            }
+            return JSON.parse(output.content);
+        } catch (e) { return null; }
+    }
 
-            // Parse the output from bridge.py
-            // It prints {"content": "..."} or {"error": "..."}
-            let output;
-            try {
-                output = JSON.parse(taskResult);
-            } catch (e) {
-                console.error("Stash-Buttplug: Failed to parse task output", e);
-                return;
-            }
-
-            if (output.error) {
-                if (output.error.includes("File not found")) {
-                    console.log("Stash-Buttplug: Funscript file missing:", output.error);
-                } else {
-                    console.error("Stash-Buttplug: Bridge Error:", output.error);
-                }
-                currentScript = null;
-                return;
-            }
-
-            if (output.content) {
-                // The content itself is the JSON string of the funscript
-                currentScript = JSON.parse(output.content);
-                console.log("Stash-Buttplug: Funscript loaded!", currentScript.actions.length, "actions");
-            }
-
-        } catch (e) {
-            console.error("Stash-Buttplug: Loader Error", e);
+    // 5. Funscript Loader (Multi-File)
+    async function loadFunscript() {
+        const matches = window.location.pathname.match(/\/scenes\/(\d+)/);
+        if (!matches) {
+            currentScript = null;
+            return;
         }
+        const sceneId = matches[1];
+
+        const mainPath = await getScenePath(sceneId);
+        if (!mainPath) {
+            currentScript = null;
+            return;
+        }
+
+        // Load Main Script
+        const mainScript = await fetchScript(mainPath);
+        if (!mainScript) {
+            console.log("Stash-Buttplug: Main funscript not found.");
+            currentScript = null;
+            return;
+        }
+
+        // Try Load Aux Scripts
+        // Convention: video.funscript -> video.vibrate.funscript
+        const vibePath = mainPath.replace(".funscript", ".vibrate.funscript");
+        const rotatePath = mainPath.replace(".funscript", ".rotate.funscript");
+
+        const vibeScript = await fetchScript(vibePath);
+        const rotateScript = await fetchScript(rotatePath);
+
+        // Store them in currentScript object
+        currentScript = {
+            main: mainScript,
+            vibrate: vibeScript,
+            rotate: rotateScript
+        };
+
+        console.log("Stash-Buttplug: Scripts Loaded:",
+            "Main:", mainScript.actions.length,
+            "Vibe:", vibeScript ? vibeScript.actions.length : "None",
+            "Rotate:", rotateScript ? rotateScript.actions.length : "None"
+        );
+    }
+
+    function updateIndex(script, idx, time) {
+        if (!script) return 0;
+        let i = idx;
+
+        // Reset if wrapped
+        if (i >= script.actions.length) i = 0;
+        // Or if time jumped back
+        if (i > 0 && script.actions[i].at > time + 1000) i = 0;
+
+        while (i < script.actions.length - 1 && script.actions[i].at < time) {
+            i++;
+        }
+        return i;
     }
 
     // 6. Sync Logic
@@ -345,76 +350,84 @@
             return;
         }
 
-        // Apply Latency
         const now = (videoEl.currentTime * 1000) - config.latency;
 
-        while (scriptIndex < currentScript.actions.length - 1 && currentScript.actions[scriptIndex].at < now) {
-            scriptIndex++;
+        // Update Indices
+        state.mainIdx = updateIndex(currentScript.main, state.mainIdx, now);
+        state.vibeIdx = updateIndex(currentScript.vibrate, state.vibeIdx, now);
+        state.rotateIdx = updateIndex(currentScript.rotate, state.rotateIdx, now);
+
+        // 1. Process Main Action (Linear)
+        const mainTarget = currentScript.main.actions[state.mainIdx];
+        const mainDuration = mainTarget.at - now;
+
+        let shouldSendMain = false;
+        if (mainDuration > 0 && mainDuration < 1000 && !mainTarget._sent) {
+            shouldSendMain = true;
+            mainTarget._sent = true;
         }
 
-        if (scriptIndex > 0 && currentScript.actions[scriptIndex].at > now + 2000) {
-            scriptIndex = 0;
+        // Calculate Fallback Speed/Intensity from Main Script
+        // We ensure this runs if we are in "play" mode, even if no linear command is sent.
+        // We use the same 'shouldSendMain' timing cadence since that represents a "stroke".
+        // If we want smooth continuous updates regardless of stroke triggers, we'd need a different logic,
+        // but syncing to strokes is usually best for fallback.
+
+        let fallbackIntensity = 0;
+        if (shouldSendMain) {
+            const lastPos = currentScript.main.actions[state.mainIdx - 1] ? currentScript.main.actions[state.mainIdx - 1].pos : mainTarget.pos;
+            const dist = Math.abs(mainTarget.pos - lastPos) / 100.0;
+            const durSec = mainDuration / 1000.0;
+            const speed = durSec > 0 ? (dist / durSec) : 0;
+            fallbackIntensity = Math.min(speed / 4.0, 1.0); // Clamp
+            if (dist < 0.01) fallbackIntensity = 0;
         }
 
-        const target = currentScript.actions[scriptIndex];
-        const duration = target.at - now;
 
-        if (duration > 0 && duration < 1000) {
-            if (!target._sent) {
-                const pos = target.pos / 100.0;
-
-                // Calculate Speed (0.0 - 1.0 approx)
-                // Speed = distance / duration. 
-                // Full stroke (1.0 distance) in 200ms = 5.0 units/sec. 
-                // Let's normalize: 200ms for full stroke is "Max Speed".
-                const lastPos = currentScript.actions[scriptIndex - 1] ? currentScript.actions[scriptIndex - 1].pos : target.pos;
-                const distance = Math.abs(target.pos - lastPos) / 100.0;
-
-                // Speed calculation
-                // Base speed: 1.0 distance in 1 sec = 1.0
-                // We want fast strokes to be 1.0 intensity. 
-                // A fast stroke is maybe > 3 strokes/sec? 
-                // Let's say max intensity is reached if speed >= 4.0 (250ms full stroke)
-                let speed = 0;
-                if (duration > 0) {
-                    speed = (distance / (duration / 1000.0));
-                }
-
-                // Map speed to 0-1 intensity
-                // Clamp at 5.0 (very fast)
-                let intensity = Math.min(speed / 4.0, 1.0);
-
-                // If stopped, intensity should correspond to speed 0? 
-                // Funscripts usually just stop.
-                if (distance < 0.01) intensity = 0;
-
-                client.devices.forEach(d => {
-                    try {
-                        // 1. Linear (Stroker)
-                        if (config.enableStroker !== false) {
-                            d.linear(duration, pos).catch(e => { });
-                        }
-
-                        // 2. Vibrator
-                        if (config.enableVibrator !== false && d.vibrate) {
-                            // Scale by config
-                            const vibeScale = (config.vibeIntensity || 100) / 100.0;
-                            const finalVibe = intensity * vibeScale;
-                            d.vibrate(finalVibe).catch(e => { });
-                        }
-
-                        // 3. Rotator
-                        if (config.enableRotator !== false && d.rotate) {
-                            const rotScale = (config.rotateIntensity || 100) / 100.0;
-                            const finalRot = intensity * rotScale;
-                            d.rotate(finalRot, true).catch(e => { }); // true = clockwise
-                        }
-
-                    } catch (e) { }
-                });
-                target._sent = true;
+        // Execute Commands
+        client.devices.forEach(d => {
+            // A. Linear (Main Script)
+            if (shouldSendMain && d.linear) {
+                d.linear(mainDuration, mainTarget.pos / 100.0).catch(e => { });
             }
-        }
+
+            // B. Vibration
+            if (d.vibrate) {
+                // Priority: Explore Vibrate Script -> Fallback -> None
+                if (currentScript.vibrate) {
+                    const idx = state.vibeIdx;
+                    const action = currentScript.vibrate.actions[idx];
+                    const dur = action.at - now;
+                    if (dur > 0 && dur < 500 && !action._sent) {
+                        const intensity = (action.pos / 100.0) * ((config.vibeIntensity || 100) / 100.0);
+                        d.vibrate(intensity).catch(e => { });
+                        action._sent = true;
+                    }
+                } else if (config.fallbackVibration && shouldSendMain) {
+                    // Fallback using Main
+                    const intensity = fallbackIntensity * ((config.vibeIntensity || 100) / 100.0);
+                    d.vibrate(intensity).catch(e => { });
+                }
+            }
+
+            // C. Rotation
+            if (d.rotate) {
+                if (currentScript.rotate) {
+                    const idx = state.rotateIdx;
+                    const action = currentScript.rotate.actions[idx];
+                    const dur = action.at - now;
+                    if (dur > 0 && dur < 500 && !action._sent) {
+                        const speed = (action.pos / 100.0) * ((config.rotateIntensity || 100) / 100.0);
+                        d.rotate(speed, true).catch(e => { });
+                        action._sent = true;
+                    }
+                } else if (config.fallbackRotation && shouldSendMain) {
+                    const speed = fallbackIntensity * ((config.rotateIntensity || 100) / 100.0);
+                    d.rotate(speed, true).catch(e => { });
+                }
+            }
+        });
+
         requestAnimationFrame(tick);
     }
 
@@ -424,9 +437,15 @@
         if (v && v !== videoEl) {
             videoEl = v;
             v.onseeked = () => {
-                scriptIndex = 0;
+                // Reset indices
+                state.mainIdx = 0;
+                state.vibeIdx = 0;
+                state.rotateIdx = 0;
                 if (currentScript) {
-                    currentScript.actions.forEach(a => a._sent = false);
+                    // Reset sent flags
+                    if (currentScript.main) currentScript.main.actions.forEach(a => a._sent = false);
+                    if (currentScript.vibrate) currentScript.vibrate.actions.forEach(a => a._sent = false);
+                    if (currentScript.rotate) currentScript.rotate.actions.forEach(a => a._sent = false);
                 }
             };
             loadFunscript();
