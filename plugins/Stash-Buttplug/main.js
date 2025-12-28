@@ -260,7 +260,12 @@
             }
 
             if (output.error) {
-                console.error("Stash-Buttplug: Bridge Error:", output.error);
+                if (output.error.includes("File not found")) {
+                    console.log("Stash-Buttplug: Funscript file missing:", output.error);
+                } else {
+                    console.error("Stash-Buttplug: Bridge Error:", output.error);
+                }
+                currentScript = null;
                 return;
             }
 
