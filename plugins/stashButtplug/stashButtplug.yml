@@ -1,0 +1,13 @@
+name: stashButtplug
+description: Connects StashApp to Buttplug.io (Intiface) and syncs Funscripts (Client-Side).
+version: 1.1
+url: https://github.com/happykinkster/stash-buttplug
+ui:
+  javascript:
+    - main.js
+  csp:
+    script-src:
+      - https://cdn.jsdelivr.net
+    connect-src:
+      - ws://localhost:12345
+      - ws://127.0.0.1:12345
