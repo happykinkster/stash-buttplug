@@ -10,7 +10,7 @@ Add this repository as a plugin source in StashApp:
 2. Click **Sources** -> **Add Source**.
 3. Enter:
    - **Name**: Stash-Buttplug
-   - **URL**: `https://happykinkster.github.io/stash-buttplug/index.yml`
+   - **URL**: `https://happykinkster.github.io/stash-buttplug/main/index.yml`
 4. install the **Stash-Buttplug** plugin from the **Available** tab.
 
 ## Plugin Details
