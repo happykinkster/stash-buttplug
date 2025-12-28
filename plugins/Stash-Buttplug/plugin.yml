@@ -11,6 +11,8 @@ ui:
     connect-src:
       - ws://localhost:12345
       - ws://127.0.0.1:12345
+      - http://localhost:9998
+      - http://127.0.0.1:9998
 exec: [python, bridge.py]
 tasks:
   - name: Start Buttplug Bridge
