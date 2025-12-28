@@ -21,7 +21,7 @@
 
     // Default Config
     const defaults = {
-        serverUrl: "ws://localhost:12345/buttplug",
+        serverUrl: "ws://localhost:12345",
         latency: 0,
         autoConnect: false,
         debug: false

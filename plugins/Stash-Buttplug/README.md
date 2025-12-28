@@ -6,7 +6,7 @@ This plugin connects StashApp to Buttplug.io (Intiface) to control devices like 
 - **Frontend Integration**: Adds a "Toy" button to the Stash navbar to connect/disconnect.
 - **Funscript Support**: Automatically finds the funscript associated with the playing scene and syncs it.
 - **Bridge Server**: Includes a Python bridge to securely serve funscript files from your disk to the browser.
-- **Intiface Support**: Connects to standard Intiface Central websocket (`ws://localhost:12345/buttplug`).
+- **Intiface Support**: Connects to standard Intiface Central websocket (`ws://localhost:12345`).
 
 ## Installation
 

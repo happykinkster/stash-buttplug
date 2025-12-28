@@ -7,6 +7,13 @@ import sys
 # allow plugin to run even if port is busy (restart)
 socketserver.TCPServer.allow_reuse_address = True
 
+# Debug logging
+try:
+    with open("bridge_debug.log", "w") as f:
+        f.write("Bridge process started\n")
+except:
+    pass
+
 PORT = 9998
 
 class Handler(http.server.SimpleHTTPRequestHandler):
