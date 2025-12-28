@@ -17,6 +17,7 @@ exec:
   - "{pluginDir}/stashButtplug.py"
 
 interface: raw
+errLog: debug
 
 tasks:
   - name: GetFunscript
