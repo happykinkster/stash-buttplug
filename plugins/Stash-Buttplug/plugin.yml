@@ -5,7 +5,7 @@ url: https://github.com/happykinkster/stash-buttplug
 ui:
   javascript:
     - main.js
+exec: [python, bridge.py]
 tasks:
   - name: Start Buttplug Bridge
     description: Starts the local server to allow accessing funscript files. Run this once per session.
-    exec: [python, bridge.py]
