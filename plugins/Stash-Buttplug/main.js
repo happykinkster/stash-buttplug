@@ -203,7 +203,7 @@
         }
     }
 
-    // 5. Funscript Loader
+    // 5. Funscript Loader (via Plugin Task)
     async function loadFunscript() {
         const matches = window.location.pathname.match(/\/scenes\/(\d+)/);
         if (!matches) {
@@ -218,16 +218,61 @@
             return;
         }
 
-        // Fetch from Bridge
+        // Run Plugin Task via GraphQL
+        const query = `mutation RunTask($plugin_id: ID!, $task_name: String!, $args: [PluginArgInput!]) {
+            runPluginTask(plugin_id: $plugin_id, task_name: $task_name, args: $args)
+        }`;
+
+        const variables = {
+            plugin_id: "Stash-Buttplug", // Must match plugin.yml ID (which is 'name' or directory name?)
+            // Stash uses ID from yml if present, else dir name. 'name' in yml is 'Stash-Buttplug'
+            task_name: "GetFunscript",
+            args: [{ key: "path", value: path }]
+        };
+
         try {
-            const bridgeUrl = `http://localhost:9998/funscript?path=${encodeURIComponent(path)}`;
-            const res = await fetch(bridgeUrl);
-            if (!res.ok) throw new Error(res.statusText);
-            const json = await res.json();
-            currentScript = json;
-            console.log("Stash-Buttplug: Funscript loaded!", currentScript.actions.length, "actions");
+            const req = await fetch('/graphql', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query, variables })
+            });
+            const res = await req.json();
+
+            if (res.errors) {
+                console.error("Stash-Buttplug: Task Error", res.errors);
+                return;
+            }
+
+            // Task returns a string (the output of the script)
+            const taskResult = res.data?.runPluginTask;
+            if (!taskResult) {
+                console.warn("Stash-Buttplug: No content returned from task");
+                return;
+            }
+
+            // Parse the output from bridge.py
+            // It prints {"content": "..."} or {"error": "..."}
+            let output;
+            try {
+                output = JSON.parse(taskResult);
+            } catch (e) {
+                console.error("Stash-Buttplug: Failed to parse task output", e);
+                return;
+            }
+
+            if (output.error) {
+                console.error("Stash-Buttplug: Bridge Error:", output.error);
+                return;
+            }
+
+            if (output.content) {
+                // The content itself is the JSON string of the funscript
+                currentScript = JSON.parse(output.content);
+                console.log("Stash-Buttplug: Funscript loaded!", currentScript.actions.length, "actions");
+            }
+
         } catch (e) {
-            console.error("Stash-Buttplug: Bridge Error", e);
+            console.error("Stash-Buttplug: Loader Error", e);
         }
     }
 
