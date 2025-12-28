@@ -1,3 +1,9 @@
 import sys
 import json
-print(json.dumps({"content": "DEBUG_SUCCESS"}))
+import os
+
+# Minimal Script
+try:
+    print(json.dumps({"content": "PYTHON_SUCCESS"}))
+except Exception as e:
+    print(json.dumps({"error": str(e)}))
