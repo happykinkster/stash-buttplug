@@ -1,0 +1,6 @@
+- id: stash-buttplug
+  name: Stash-Buttplug
+  version: 1.0
+  description: Connects StashApp to Buttplug.io (Intiface) and syncs Funscripts.
+  path: plugin.yml
+  metadata: plugin.yml

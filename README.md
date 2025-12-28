@@ -15,8 +15,8 @@ This plugin connects StashApp to Buttplug.io (Intiface) to control devices like 
 1. Go to **Settings > Plugins**.
 2. Click **Sources** (top right) -> **Add Source**.
 3. Enter the following details:
-   - **Name**: Stash-Buttplug (or any name you prefer)
-   - **URL**: `https://github.com/happykinkster/stash-buttplug`
+   - **Name**: Stash-Buttplug
+   - **URL**: `https://raw.githubusercontent.com/happykinkster/stash-buttplug/main/index.yml`
 4. Click **Confirm**.
 5. Go back to the **Available** plugins tab.
 6. Install **Stash-Buttplug**.
