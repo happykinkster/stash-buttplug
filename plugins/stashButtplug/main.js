@@ -337,12 +337,37 @@
         return i;
     }
 
+    // Helper: Stop all devices
+    function stopAllDevices() {
+        if (client && client.connected) {
+            client.devices.forEach(d => {
+                if (d.vibrate) d.vibrate(0).catch(() => { });
+                if (d.rotate) d.rotate(0, true).catch(() => { });
+                if (d.stop) d.stop().catch(() => { });
+            });
+        }
+    }
+
+    let wasPaused = true;
+
     // 6. Sync Logic
     function tick() {
-        if (!client || !client.connected || !currentScript || !videoEl || videoEl.paused) {
+        if (!client || !client.connected || !currentScript || !videoEl) {
             requestAnimationFrame(tick);
             return;
         }
+
+        // Handle Pause
+        if (videoEl.paused) {
+            if (!wasPaused) {
+                console.log("stashButtplug: Video paused, stopping devices.");
+                stopAllDevices();
+                wasPaused = true;
+            }
+            requestAnimationFrame(tick);
+            return;
+        }
+        wasPaused = false;
 
         const now = (videoEl.currentTime * 1000) - config.latency;
 
@@ -352,21 +377,23 @@
         state.rotateIdx = updateIndex(currentScript.rotate, state.rotateIdx, now);
 
         // 1. Process Main Action (Linear)
+        // Ensure we have a valid action
         const mainTarget = currentScript.main.actions[state.mainIdx];
+        if (!mainTarget) {
+            requestAnimationFrame(tick);
+            return;
+        }
+
         const mainDuration = mainTarget.at - now;
 
         let shouldSendMain = false;
+        // Only trigger action if close enough (active segment)
         if (mainDuration > 0 && mainDuration < 1000 && !mainTarget._sent) {
             shouldSendMain = true;
             mainTarget._sent = true;
         }
 
-        // Calculate Fallback Speed/Intensity from Main Script
-        // We ensure this runs if we are in "play" mode, even if no linear command is sent.
-        // We use the same 'shouldSendMain' timing cadence since that represents a "stroke".
-        // If we want smooth continuous updates regardless of stroke triggers, we'd need a different logic,
-        // but syncing to strokes is usually best for fallback.
-
+        // Calculate Fallback Speed
         let fallbackIntensity = 0;
         if (shouldSendMain) {
             const lastPos = currentScript.main.actions[state.mainIdx - 1] ? currentScript.main.actions[state.mainIdx - 1].pos : mainTarget.pos;
@@ -377,6 +404,9 @@
             if (dist < 0.01) fallbackIntensity = 0;
         }
 
+        // Detect "Gap" (Next action is far away)
+        // If we represent a gap as > 2 seconds to next point
+        const isGap = mainDuration > 2000;
 
         // Execute Commands
         client.devices.forEach(d => {
@@ -387,20 +417,25 @@
 
             // B. Vibration
             if (d.vibrate) {
-                // Priority: Explore Vibrate Script -> Fallback -> None
                 if (currentScript.vibrate) {
                     const idx = state.vibeIdx;
                     const action = currentScript.vibrate.actions[idx];
-                    const dur = action.at - now;
-                    if (dur > 0 && dur < 500 && !action._sent) {
-                        const intensity = (action.pos / 100.0) * ((config.vibeIntensity || 100) / 100.0);
-                        d.vibrate(intensity).catch(e => { });
-                        action._sent = true;
+                    if (action) {
+                        const dur = action.at - now;
+                        if (dur > 0 && dur < 500 && !action._sent) {
+                            const intensity = (action.pos / 100.0) * ((config.vibeIntensity || 100) / 100.0);
+                            d.vibrate(intensity).catch(e => { });
+                            action._sent = true;
+                        }
                     }
-                } else if (config.fallbackVibration && shouldSendMain) {
-                    // Fallback using Main
-                    const intensity = fallbackIntensity * ((config.vibeIntensity || 100) / 100.0);
-                    d.vibrate(intensity).catch(e => { });
+                } else if (config.fallbackVibration) {
+                    if (shouldSendMain) {
+                        const intensity = fallbackIntensity * ((config.vibeIntensity || 100) / 100.0);
+                        d.vibrate(intensity).catch(e => { });
+                    } else if (isGap) {
+                        // Stop vibration during gaps
+                        d.vibrate(0).catch(() => { });
+                    }
                 }
             }
 
@@ -409,15 +444,22 @@
                 if (currentScript.rotate) {
                     const idx = state.rotateIdx;
                     const action = currentScript.rotate.actions[idx];
-                    const dur = action.at - now;
-                    if (dur > 0 && dur < 500 && !action._sent) {
-                        const speed = (action.pos / 100.0) * ((config.rotateIntensity || 100) / 100.0);
-                        d.rotate(speed, true).catch(e => { });
-                        action._sent = true;
+                    if (action) {
+                        const dur = action.at - now;
+                        if (dur > 0 && dur < 500 && !action._sent) {
+                            const speed = (action.pos / 100.0) * ((config.rotateIntensity || 100) / 100.0);
+                            d.rotate(speed, true).catch(e => { });
+                            action._sent = true;
+                        }
                     }
-                } else if (config.fallbackRotation && shouldSendMain) {
-                    const speed = fallbackIntensity * ((config.rotateIntensity || 100) / 100.0);
-                    d.rotate(speed, true).catch(e => { });
+                } else if (config.fallbackRotation) {
+                    if (shouldSendMain) {
+                        const speed = fallbackIntensity * ((config.rotateIntensity || 100) / 100.0);
+                        d.rotate(speed, true).catch(e => { });
+                    } else if (isGap) {
+                        // Stop rotation during gaps
+                        d.rotate(0, true).catch(() => { });
+                    }
                 }
             }
         });
