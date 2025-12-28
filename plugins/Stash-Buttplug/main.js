@@ -262,7 +262,7 @@
             runPluginTask(plugin_id: $plugin_id, task_name: $task_name, args: $args)
         }`;
         const variables = {
-            plugin_id: "Buttplug",
+            plugin_id: "StashButtplug",
             task_name: "GetFunscript",
             args: [{ key: "path", value: { str: path } }]
         };
@@ -274,16 +274,30 @@
                 body: JSON.stringify({ query, variables })
             });
             const res = await req.json();
-            if (res.errors || !res.data?.runPluginTask) return null;
+
+            // Debug Log
+            console.log("Stash-Buttplug: fetchScript response:", JSON.stringify(res));
+
+            if (res.errors) {
+                console.error("Stash-Buttplug: GQL Errors:", res.errors);
+                return null;
+            }
+            if (!res.data?.runPluginTask) {
+                console.error("Stash-Buttplug: No data returned from runPluginTask");
+                return null;
+            }
 
             const output = JSON.parse(res.data.runPluginTask);
             if (output.error || !output.content) {
-                console.error("Stash-Buttplug: fetchScript error:", output.error);
+                console.error("Stash-Buttplug: Plugin Task Error:", output);
                 return null;
             }
 
             return JSON.parse(output.content);
-        } catch (e) { return null; }
+        } catch (e) {
+            console.error("Stash-Buttplug: fetchScript Exception:", e);
+            return null;
+        }
     }
 
     // 5. Funscript Loader (Multi-File)
