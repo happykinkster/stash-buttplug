@@ -5,7 +5,7 @@
     // 1. Dynamic Import of Buttplug
     let Buttplug;
     try {
-        Buttplug = await import('https://cdn.jsdelivr.net/npm/buttplug@3.0.0/dist/web/buttplug.mjs');
+        Buttplug = await import('https://cdn.jsdelivr.net/npm/buttplug@3.2.2/dist/web/buttplug.mjs');
     } catch (e) {
         console.error("Stash-Buttplug: Failed to load Buttplug library", e);
         return;
