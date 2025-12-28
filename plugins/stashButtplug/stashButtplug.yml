@@ -12,7 +12,7 @@ ui:
       - ws://localhost:12345
       - ws://127.0.0.1:12345
 
-exec: [echo, '{"content": "DEBUG_SUCCESS"}']
+exec: [python, "{pluginDir}/debug.py"]
 
 interface: raw
 
