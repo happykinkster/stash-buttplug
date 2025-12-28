@@ -11,7 +11,7 @@
         return;
     }
 
-    const { ButtplugClient, ButtplugWebsocketConnector } = Buttplug;
+    const { ButtplugClient, ButtplugBrowserWebsocketClientConnector } = Buttplug;
 
     // 2. Global State
     let client = null;
@@ -166,7 +166,7 @@
             client = new ButtplugClient("Stash Client");
 
             try {
-                const connector = new ButtplugWebsocketConnector(config.serverUrl);
+                const connector = new ButtplugBrowserWebsocketClientConnector(config.serverUrl);
                 await client.connect(connector);
                 status.innerText = 'Conn';
                 status.style.color = '#28a745';
