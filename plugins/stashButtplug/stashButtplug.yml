@@ -12,9 +12,7 @@ ui:
       - ws://localhost:12345
       - ws://127.0.0.1:12345
 
-exec: [python, "{pluginDir}/debug.py"]
-
-interface: raw
+exec: [python3, "-c", "import json; print(json.dumps({'content': 'INLINE_PYTHON_SUCCESS'}))"]
 
 tasks:
   - name: GetFunscript
