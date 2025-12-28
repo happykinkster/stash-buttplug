@@ -18,5 +18,3 @@ interface: raw
 tasks:
   - name: GetFunscript
     description: Reads a funscript file from the server filesystem.
-  - name: Start Buttplug Bridge
-    description: (Deprecated) This legacy task is no longer needed.
