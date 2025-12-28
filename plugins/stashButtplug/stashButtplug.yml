@@ -1,4 +1,4 @@
-name: StashButtplug
+name: stashButtplug
 description: Connects StashApp to Buttplug.io (Intiface) and syncs Funscripts.
 version: 1.0
 url: https://github.com/happykinkster/stash-buttplug
@@ -12,7 +12,10 @@ ui:
       - ws://localhost:12345
       - ws://127.0.0.1:12345
 
-exec: [ls, "-la", "{pluginDir}"]
+exec: 
+  - python
+  - "{pluginDir}/stashButtplug.py"
+
 interface: raw
 
 tasks:

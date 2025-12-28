@@ -1,12 +1,12 @@
 (async function () {
-    console.log("Stash-Buttplug: Loading...");
+    console.log("stashButtplug: Loading...");
 
     // 1. Dynamic Import of Buttplug
     let Buttplug;
     try {
         Buttplug = await import('https://cdn.jsdelivr.net/npm/buttplug@3.2.2/dist/web/buttplug.mjs');
     } catch (e) {
-        console.error("Stash-Buttplug: Failed to load Buttplug library", e);
+        console.error("stashButtplug: Failed to load Buttplug library", e);
         return;
     }
 
@@ -70,7 +70,7 @@
         }
 
         if (!nav) {
-            console.error("Stash-Buttplug: Navbar not found. Aborting UI setup.");
+            console.error("stashButtplug: Navbar not found. Aborting UI setup.");
             return;
         }
 
@@ -225,7 +225,7 @@
                 await client.connect(connector);
                 status.innerText = 'Connected';
                 status.style.color = '#28a745';
-                console.log("Stash-Buttplug: Connected to Server");
+                console.log("stashButtplug: Connected to Server");
 
                 await client.startScanning();
             } catch (e) {
@@ -276,26 +276,26 @@
             const res = await req.json();
 
             // Debug Log
-            console.log("Stash-Buttplug: fetchScript response:", JSON.stringify(res));
+            console.log("stashButtplug: fetchScript response:", JSON.stringify(res));
 
             if (res.errors) {
-                console.error("Stash-Buttplug: GQL Errors:", res.errors);
+                console.error("stashButtplug: GQL Errors:", res.errors);
                 return null;
             }
             if (!res.data?.runPluginTask) {
-                console.error("Stash-Buttplug: No data returned from runPluginTask");
+                console.error("stashButtplug: No data returned from runPluginTask");
                 return null;
             }
 
             const output = JSON.parse(res.data.runPluginTask);
             if (output.error || !output.content) {
-                console.error("Stash-Buttplug: Plugin Task Error:", output);
+                console.error("stashButtplug: Plugin Task Error:", output);
                 return null;
             }
 
             return JSON.parse(output.content);
         } catch (e) {
-            console.error("Stash-Buttplug: fetchScript Exception:", e);
+            console.error("stashButtplug: fetchScript Exception:", e);
             return null;
         }
     }
@@ -318,7 +318,7 @@
         // Load Main Script
         const mainScript = await fetchScript(mainPath);
         if (!mainScript) {
-            console.log("Stash-Buttplug: Main funscript not found.");
+            console.log("stashButtplug: Main funscript not found.");
             currentScript = null;
             return;
         }
@@ -338,7 +338,7 @@
             rotate: rotateScript
         };
 
-        console.log("Stash-Buttplug: Scripts Loaded:",
+        console.log("stashButtplug: Scripts Loaded:",
             "Main:", mainScript.actions.length,
             "Vibe:", vibeScript ? vibeScript.actions.length : "None",
             "Rotate:", rotateScript ? rotateScript.actions.length : "None"
