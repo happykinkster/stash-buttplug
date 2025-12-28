@@ -5,6 +5,12 @@ url: https://github.com/happykinkster/stash-buttplug
 ui:
   javascript:
     - main.js
+csp:
+  script-src:
+    - https://cdn.jsdelivr.net
+  connect-src:
+    - ws://localhost:12345
+    - ws://127.0.0.1:12345
 exec: [python, bridge.py]
 tasks:
   - name: Start Buttplug Bridge
