@@ -239,7 +239,7 @@
             const res = await req.json();
 
             if (res.errors) {
-                console.error("Stash-Buttplug: Task Error", res.errors);
+                console.error("Stash-Buttplug: Task Error", JSON.stringify(res.errors));
                 return;
             }
 
