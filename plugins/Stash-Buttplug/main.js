@@ -262,7 +262,7 @@
             runPluginTask(plugin_id: $plugin_id, task_name: $task_name, args: $args)
         }`;
         const variables = {
-            plugin_id: "StashButtplug",
+            plugin_id: "Buttplug",
             task_name: "GetFunscript",
             args: [{ key: "path", value: { str: path } }]
         };

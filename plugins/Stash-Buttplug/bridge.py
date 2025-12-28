@@ -8,23 +8,16 @@ import io
 # Enforce UTF-8
 sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8')
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
-# Debug logging setup
-log_path = None
-try:
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    log_path = os.path.join(script_dir, "bridge_debug.log")
-    with open(log_path, "a") as f:
-       f.write(f"Task started. CWD: {os.getcwd()}\n")
-except:
-    pass
+def log(msg):
+    # Log to stderr so it shows up in StashApp logs
+    print(f"[Buttplug] {msg}", file=sys.stderr)
+
+log(f"Task started. CWD: {os.getcwd()}")
 
 def return_error(msg):
-    if log_path:
-        try:
-            with open(log_path, "a") as f:
-                f.write(f"Error: {msg}\n")
-        except: pass
+    log(f"Error: {msg}")
     print(json.dumps({"error": msg}))
     sys.exit(0)
 
@@ -32,10 +25,7 @@ def main():
     try:
         # Stash passes arguments as JSON via stdin
         input_data = sys.stdin.read()
-        try:
-            with open(log_path, "a") as f:
-                f.write(f"Input: {input_data}\n")
-        except: pass
+        log(f"Input: {input_data}")
 
         if not input_data:
             return_error("No input data received")
@@ -46,10 +36,6 @@ def main():
             return_error("Invalid JSON input")
             
         # Extract 'path' argument
-        # Stash might pass it as a flat dict if using interface: raw
-        # Or as args map. Let's assume simple dict from 'raw' or args.
-        # But 'runPluginTask' arguments come in as a map.
-        
         file_path = args.get('path')
         if not file_path:
             return_error("Missing 'path' argument")
@@ -58,7 +44,24 @@ def main():
             return_error("Only .funscript files allowed")
 
         if not os.path.exists(file_path):
-            return_error(f"File not found: {file_path}")
+            # Fallback: Try to find ANY funscript in the same directory
+            search_dir = os.path.dirname(file_path)
+            found_fallback = False
+            
+            if os.path.exists(search_dir):
+                try:
+                    for f in os.listdir(search_dir):
+                        if f.lower().endswith(".funscript"):
+                            fallback_path = os.path.join(search_dir, f)
+                            log(f"Exact match not found. Fallback to: {fallback_path}")
+                            file_path = fallback_path
+                            found_fallback = True
+                            break
+                except Exception as e:
+                    log(f"Fallback search error: {e}")
+
+            if not found_fallback:
+                return_error(f"File not found: {file_path}")
 
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
