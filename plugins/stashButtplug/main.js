@@ -287,7 +287,17 @@
                 return null;
             }
 
-            const output = JSON.parse(res.data.runPluginTask);
+            let resultData = res.data.runPluginTask;
+
+            // Check if result is a Task ID (Async Execution)
+            // If it matches a number purely, it's a task ID.
+            if (/^\d+$/.test(resultData)) {
+                console.log(`stashButtplug: Received Task ID ${resultData}. Polling for result...`);
+                resultData = await pollTask(resultData);
+                if (!resultData) return null;
+            }
+
+            const output = JSON.parse(resultData);
             if (output.error || !output.content) {
                 console.error("stashButtplug: Plugin Task Error:", output);
                 return null;
@@ -298,6 +308,44 @@
             console.error("stashButtplug: fetchScript Exception:", e);
             return null;
         }
+    }
+
+    // Helper: Poll Task Status
+    async function pollTask(taskId) {
+        const query = `query FindTask($id: ID!) {
+            findTask(id: $id) {
+                status
+                output
+            }
+        }`;
+
+        let attempts = 0;
+        while (attempts < 20) { // 10 seconds max
+            await new Promise(r => setTimeout(r, 500));
+            try {
+                const req = await fetch('/graphql', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query, variables: { id: taskId } })
+                });
+                const res = await req.json();
+                const task = res.data?.findTask;
+
+                if (!task) return null;
+
+                if (task.status === 'SUCCEEDED') {
+                    // Output is usually the JSON content string
+                    return task.output;
+                } else if (task.status === 'FAILED') {
+                    console.error("stashButtplug: Task Failed", task.output);
+                    return null;
+                }
+                // If RUNNING/PENDING/QUEUED, continue
+            } catch (e) { console.error(e); }
+            attempts++;
+        }
+        console.error("stashButtplug: Task Polling Timed Out");
+        return null;
     }
 
     // 5. Funscript Loader (Multi-File)
