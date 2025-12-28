@@ -287,14 +287,15 @@
                 return null;
             }
 
-            let resultData = res.data.runPluginTask;
+            const resultData = res.data.runPluginTask;
 
             // Check if result is a Task ID (Async Execution)
-            // If it matches a number purely, it's a task ID.
             if (/^\d+$/.test(resultData)) {
-                console.log(`stashButtplug: Received Task ID ${resultData}. Polling for result...`);
-                resultData = await pollTask(resultData);
-                if (!resultData) return null;
+                console.error(`stashButtplug: CRITICAL ERROR - Stash returned a Task ID (${resultData}) instead of output.`);
+                console.error("stashButtplug: This means the plugin is running asynchronously, which is not supported.");
+                console.error("stashButtplug: Please check Stash Logs/Tasks for the output of Task " + resultData);
+                alert("Stash-Buttplug Error: The plugin is running in background mode. Please check the console/logs.");
+                return null;
             }
 
             const output = JSON.parse(resultData);

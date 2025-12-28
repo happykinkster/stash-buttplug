@@ -1,6 +1,6 @@
 name: stashButtplug
-description: Connects StashApp to Buttplug.io (Intiface) and syncs Funscripts.
-version: 1.0
+description: Connects StashApp to Buttplug.io (Intiface) and syncs Funscripts (Client-Side).
+version: 1.1
 url: https://github.com/happykinkster/stash-buttplug
 ui:
   javascript:
@@ -11,14 +11,3 @@ ui:
     connect-src:
       - ws://localhost:12345
       - ws://127.0.0.1:12345
-
-exec:
-  - python3
-  - "{pluginDir}/stashButtplug.py"
-
-interface: raw
-errLog: debug
-
-tasks:
-  - name: GetFunscript
-    description: Reads a funscript file from the server filesystem.
