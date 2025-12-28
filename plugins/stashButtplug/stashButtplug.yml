@@ -13,6 +13,7 @@ ui:
       - ws://127.0.0.1:12345
 
 exec: [ls, "-la"]
+interface: raw
 
 tasks:
   - name: GetFunscript
