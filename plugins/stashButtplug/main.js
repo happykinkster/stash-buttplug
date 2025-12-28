@@ -236,80 +236,7 @@
     }
 
     // 4. Stash GQL Helper
-    async function getScenePath(sceneId) {
-        const query = `query FindScene($id: ID!) {
-            findScene(id: $id) {
-                paths { funscript }
-            }
-        }`;
 
-        try {
-            const req = await fetch('/graphql', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ query, variables: { id: sceneId } })
-            });
-            const res = await req.json();
-            return res.data?.findScene?.paths?.funscript;
-        } catch (e) {
-            return null;
-        }
-    }
-
-    // Helper to fetch and parse a specific script file
-    async function fetchScript(path) {
-        const query = `mutation RunTask($plugin_id: ID!, $task_name: String!, $args: [PluginArgInput!]) {
-            runPluginTask(plugin_id: $plugin_id, task_name: $task_name, args: $args)
-        }`;
-        const variables = {
-            plugin_id: "stashButtplug",
-            task_name: "GetFunscript",
-            args: [{ key: "path", value: { str: path } }]
-        };
-
-        try {
-            const req = await fetch('/graphql', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ query, variables })
-            });
-            const res = await req.json();
-
-            // Debug Log
-            console.log("stashButtplug: fetchScript response:", JSON.stringify(res));
-
-            if (res.errors) {
-                console.error("stashButtplug: GQL Errors:", res.errors);
-                return null;
-            }
-            if (!res.data?.runPluginTask) {
-                console.error("stashButtplug: No data returned from runPluginTask");
-                return null;
-            }
-
-            const resultData = res.data.runPluginTask;
-
-            // Check if result is a Task ID (Async Execution)
-            if (/^\d+$/.test(resultData)) {
-                console.error(`stashButtplug: CRITICAL ERROR - Stash returned a Task ID (${resultData}) instead of output.`);
-                console.error("stashButtplug: This means the plugin is running asynchronously, which is not supported.");
-                console.error("stashButtplug: Please check Stash Logs/Tasks for the output of Task " + resultData);
-                alert("Stash-Buttplug Error: The plugin is running in background mode. Please check the console/logs.");
-                return null;
-            }
-
-            const output = JSON.parse(resultData);
-            if (output.error || !output.content) {
-                console.error("stashButtplug: Plugin Task Error:", output);
-                return null;
-            }
-
-            return JSON.parse(output.content);
-        } catch (e) {
-            console.error("stashButtplug: fetchScript Exception:", e);
-            return null;
-        }
-    }
 
     // Helper: Poll Task Status
     async function pollTask(taskId) {
@@ -349,50 +276,7 @@
         return null;
     }
 
-    // 5. Funscript Loader (Multi-File)
-    async function loadFunscript() {
-        const matches = window.location.pathname.match(/\/scenes\/(\d+)/);
-        if (!matches) {
-            currentScript = null;
-            return;
-        }
-        const sceneId = matches[1];
 
-        const mainPath = await getScenePath(sceneId);
-        if (!mainPath) {
-            currentScript = null;
-            return;
-        }
-
-        // Load Main Script
-        const mainScript = await fetchScript(mainPath);
-        if (!mainScript) {
-            console.log("stashButtplug: Main funscript not found.");
-            currentScript = null;
-            return;
-        }
-
-        // Try Load Aux Scripts
-        // Convention: video.funscript -> video.vibrate.funscript
-        const vibePath = mainPath.replace(".funscript", ".vibrate.funscript");
-        const rotatePath = mainPath.replace(".funscript", ".rotate.funscript");
-
-        const vibeScript = await fetchScript(vibePath);
-        const rotateScript = await fetchScript(rotatePath);
-
-        // Store them in currentScript object
-        currentScript = {
-            main: mainScript,
-            vibrate: vibeScript,
-            rotate: rotateScript
-        };
-
-        console.log("stashButtplug: Scripts Loaded:",
-            "Main:", mainScript.actions.length,
-            "Vibe:", vibeScript ? vibeScript.actions.length : "None",
-            "Rotate:", rotateScript ? rotateScript.actions.length : "None"
-        );
-    }
 
     function updateIndex(script, idx, time) {
         if (!script) return 0;
