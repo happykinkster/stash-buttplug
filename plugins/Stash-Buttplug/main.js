@@ -37,12 +37,31 @@
 
     // 3. UI Setup
     async function setupUI() {
-        // Wait for navbar or safe place
-        while (!document.querySelector('.navbar-nav')) {
+        // Wait up to 10s for UI
+        let attempts = 0;
+        let nav = null;
+        while (attempts < 20) {
+            // Try standard selector
+            nav = document.querySelector('.navbar-nav');
+
+            // Fallback: Try to find the container of the "Settings" or "System" link
+            if (!nav) {
+                const settingsLink = document.querySelector('a[href="/settings"]');
+                if (settingsLink) {
+                    nav = settingsLink.closest('ul') || settingsLink.closest('div.d-flex');
+                }
+            }
+
+            if (nav) break;
+
             await new Promise(r => setTimeout(r, 500));
+            attempts++;
         }
 
-        const nav = document.querySelector('.navbar-nav');
+        if (!nav) {
+            console.error("Stash-Buttplug: Navbar not found. Aborting UI setup.");
+            return;
+        }
 
         // Settings Modal HTML
         const modalHtml = `
