@@ -1,7 +1,7 @@
 name: Stash-Buttplug
 description: Connects StashApp to Buttplug.io (Intiface) and syncs Funscripts.
 version: 1.0
-url: https://github.com/generic/stash-buttplug
+url: https://github.com/happykinkster/stash-buttplug
 ui:
   javascript:
     - main.js
