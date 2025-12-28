@@ -224,10 +224,9 @@
         }`;
 
         const variables = {
-            plugin_id: "Stash-Buttplug", // Must match plugin.yml ID (which is 'name' or directory name?)
-            // Stash uses ID from yml if present, else dir name. 'name' in yml is 'Stash-Buttplug'
+            plugin_id: "Stash-Buttplug",
             task_name: "GetFunscript",
-            args: [{ key: "path", value: path }]
+            args: [{ key: "path", value: { str: path } }]
         };
 
         try {
