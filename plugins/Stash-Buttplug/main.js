@@ -24,7 +24,13 @@
         serverUrl: "ws://localhost:12345",
         latency: 0,
         autoConnect: false,
-        debug: false
+        debug: false,
+        // New Device Settings
+        enableStroker: true,
+        enableVibrator: true,
+        enableRotator: true,
+        vibeIntensity: 100, // %
+        rotateIntensity: 100 // %
     };
 
     // Load Config
@@ -78,8 +84,38 @@
                 <div class="form-group" style="margin-bottom:15px;">
                     <label style="display:block; margin-bottom:5px;">Latency (ms)</label>
                     <input type="number" id="bp-in-latency" class="form-control" style="width:100%; padding:5px; background:#333; color:#fff; border:1px solid #555;" value="${config.latency}">
-                    <small style="color:#aaa; display:block; margin-top:5px;">Positive = Delay toy action</small>
                 </div>
+
+                 <hr style="background:#555; margin: 15px 0;">
+                 <h5 style="margin-bottom:10px;">Device Control</h5>
+
+                <!-- Stroker -->
+                <div class="form-check" style="margin-bottom:10px;">
+                    <input type="checkbox" id="bp-in-stroker" ${config.enableStroker ? 'checked' : ''}> 
+                    <label for="bp-in-stroker" style="display:inline; margin-left:5px;">Enable Stroker (Linear)</label>
+                </div>
+
+                <!-- Vibrator -->
+                <div class="form-check" style="margin-bottom:5px;">
+                    <input type="checkbox" id="bp-in-vibe" ${config.enableVibrator ? 'checked' : ''}> 
+                    <label for="bp-in-vibe" style="display:inline; margin-left:5px;">Enable Vibrator</label>
+                </div>
+                <div style="margin-left: 20px; margin-bottom:10px;">
+                    <label style="font-size:0.8em; color:#aaa;">Intensity Scale: <span id="bp-val-vibe">${config.vibeIntensity}</span>%</label>
+                    <input type="range" id="bp-in-vibe-val" min="10" max="100" value="${config.vibeIntensity}" style="width:100%;">
+                </div>
+
+                <!-- Rotator -->
+                <div class="form-check" style="margin-bottom:5px;">
+                    <input type="checkbox" id="bp-in-rotate" ${config.enableRotator ? 'checked' : ''}> 
+                    <label for="bp-in-rotate" style="display:inline; margin-left:5px;">Enable Rotator</label>
+                </div>
+                 <div style="margin-left: 20px; margin-bottom:15px;">
+                    <label style="font-size:0.8em; color:#aaa;">Speed Scale: <span id="bp-val-rotate">${config.rotateIntensity}</span>%</label>
+                    <input type="range" id="bp-in-rotate-val" min="10" max="100" value="${config.rotateIntensity}" style="width:100%;">
+                </div>
+
+                <hr style="background:#555; margin: 15px 0;">
 
                 <div class="form-check" style="margin-bottom:20px;">
                     <input type="checkbox" id="bp-in-auto" ${config.autoConnect ? 'checked' : ''}> 
@@ -99,15 +135,25 @@
         div.innerHTML = modalHtml;
         document.body.appendChild(div);
 
+        // Slider listeners
+        document.getElementById('bp-in-vibe-val').oninput = (e) => document.getElementById('bp-val-vibe').innerText = e.target.value;
+        document.getElementById('bp-in-rotate-val').oninput = (e) => document.getElementById('bp-val-rotate').innerText = e.target.value;
+
         // Inputs logic
         document.getElementById('bp-btn-save').onclick = () => {
             config.serverUrl = document.getElementById('bp-in-url').value;
             config.latency = parseInt(document.getElementById('bp-in-latency').value) || 0;
             config.autoConnect = document.getElementById('bp-in-auto').checked;
 
+            // New settings
+            config.enableStroker = document.getElementById('bp-in-stroker').checked;
+            config.enableVibrator = document.getElementById('bp-in-vibe').checked;
+            config.enableRotator = document.getElementById('bp-in-rotate').checked;
+            config.vibeIntensity = parseInt(document.getElementById('bp-in-vibe-val').value) || 100;
+            config.rotateIntensity = parseInt(document.getElementById('bp-in-rotate-val').value) || 100;
+
             localStorage.setItem('stash-bp-config', JSON.stringify(config));
             document.getElementById('bp-settings-modal').style.display = 'none';
-            // alert("Settings Saved!");
         };
         document.getElementById('bp-btn-cancel').onclick = () => {
             document.getElementById('bp-settings-modal').style.display = 'none';
@@ -141,6 +187,18 @@
             document.getElementById('bp-in-url').value = config.serverUrl;
             document.getElementById('bp-in-latency').value = config.latency;
             document.getElementById('bp-in-auto').checked = config.autoConnect;
+
+            // Populate New settings
+            document.getElementById('bp-in-stroker').checked = config.enableStroker !== false;
+            document.getElementById('bp-in-vibe').checked = config.enableVibrator !== false;
+            document.getElementById('bp-in-rotate').checked = config.enableRotator !== false;
+
+            document.getElementById('bp-in-vibe-val').value = config.vibeIntensity || 100;
+            document.getElementById('bp-val-vibe').innerText = config.vibeIntensity || 100;
+
+            document.getElementById('bp-in-rotate-val').value = config.rotateIntensity || 100;
+            document.getElementById('bp-val-rotate').innerText = config.rotateIntensity || 100;
+
             document.getElementById('bp-settings-modal').style.display = 'flex';
         };
 
@@ -304,9 +362,54 @@
         if (duration > 0 && duration < 1000) {
             if (!target._sent) {
                 const pos = target.pos / 100.0;
+
+                // Calculate Speed (0.0 - 1.0 approx)
+                // Speed = distance / duration. 
+                // Full stroke (1.0 distance) in 200ms = 5.0 units/sec. 
+                // Let's normalize: 200ms for full stroke is "Max Speed".
+                const lastPos = currentScript.actions[scriptIndex - 1] ? currentScript.actions[scriptIndex - 1].pos : target.pos;
+                const distance = Math.abs(target.pos - lastPos) / 100.0;
+
+                // Speed calculation
+                // Base speed: 1.0 distance in 1 sec = 1.0
+                // We want fast strokes to be 1.0 intensity. 
+                // A fast stroke is maybe > 3 strokes/sec? 
+                // Let's say max intensity is reached if speed >= 4.0 (250ms full stroke)
+                let speed = 0;
+                if (duration > 0) {
+                    speed = (distance / (duration / 1000.0));
+                }
+
+                // Map speed to 0-1 intensity
+                // Clamp at 5.0 (very fast)
+                let intensity = Math.min(speed / 4.0, 1.0);
+
+                // If stopped, intensity should correspond to speed 0? 
+                // Funscripts usually just stop.
+                if (distance < 0.01) intensity = 0;
+
                 client.devices.forEach(d => {
                     try {
-                        d.linear(duration, pos).catch(e => { });
+                        // 1. Linear (Stroker)
+                        if (config.enableStroker !== false) {
+                            d.linear(duration, pos).catch(e => { });
+                        }
+
+                        // 2. Vibrator
+                        if (config.enableVibrator !== false && d.vibrate) {
+                            // Scale by config
+                            const vibeScale = (config.vibeIntensity || 100) / 100.0;
+                            const finalVibe = intensity * vibeScale;
+                            d.vibrate(finalVibe).catch(e => { });
+                        }
+
+                        // 3. Rotator
+                        if (config.enableRotator !== false && d.rotate) {
+                            const rotScale = (config.rotateIntensity || 100) / 100.0;
+                            const finalRot = intensity * rotScale;
+                            d.rotate(finalRot, true).catch(e => { }); // true = clockwise
+                        }
+
                     } catch (e) { }
                 });
                 target._sent = true;
