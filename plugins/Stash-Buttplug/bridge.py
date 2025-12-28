@@ -3,15 +3,28 @@ import json
 import os
 
 # Debug logging
+import io
+
+# Enforce UTF-8
+sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8')
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
+# Debug logging setup
+log_path = None
 try:
     script_dir = os.path.dirname(os.path.abspath(__file__))
     log_path = os.path.join(script_dir, "bridge_debug.log")
-    # with open(log_path, "a") as f:
-    #    f.write("Task started\n")
+    with open(log_path, "a") as f:
+       f.write(f"Task started. CWD: {os.getcwd()}\n")
 except:
     pass
 
 def return_error(msg):
+    if log_path:
+        try:
+            with open(log_path, "a") as f:
+                f.write(f"Error: {msg}\n")
+        except: pass
     print(json.dumps({"error": msg}))
     sys.exit(0)
 
@@ -19,6 +32,11 @@ def main():
     try:
         # Stash passes arguments as JSON via stdin
         input_data = sys.stdin.read()
+        try:
+            with open(log_path, "a") as f:
+                f.write(f"Input: {input_data}\n")
+        except: pass
+
         if not input_data:
             return_error("No input data received")
 

@@ -165,7 +165,7 @@
         // Connect Button
         const btn = document.createElement('button');
         btn.className = 'btn btn-secondary nav-link mr-2';
-        btn.innerHTML = `🔌 Toy`;
+        btn.innerHTML = `🔌 Buttplug.io`;
         btn.onclick = toggleConnection;
 
         // Status
@@ -174,7 +174,7 @@
         status.style.marginRight = '10px';
         status.style.color = 'red';
         status.style.fontSize = '0.8em';
-        status.innerText = 'Disc';
+        status.innerText = 'Disconnected';
 
         // Settings Button
         const setBtn = document.createElement('button');
@@ -213,7 +213,7 @@
         const status = document.getElementById('bp-status');
         if (client && client.connected) {
             await client.disconnect();
-            status.innerText = 'Disc';
+            status.innerText = 'Disconnected';
             status.style.color = 'red';
             client = null;
         } else {
@@ -223,7 +223,7 @@
             try {
                 const connector = new ButtplugBrowserWebsocketClientConnector(config.serverUrl);
                 await client.connect(connector);
-                status.innerText = 'Conn';
+                status.innerText = 'Connected';
                 status.style.color = '#28a745';
                 console.log("Stash-Buttplug: Connected to Server");
 
@@ -262,7 +262,7 @@
             runPluginTask(plugin_id: $plugin_id, task_name: $task_name, args: $args)
         }`;
         const variables = {
-            plugin_id: "Stash-Buttplug",
+            plugin_id: "StashButtplug",
             task_name: "GetFunscript",
             args: [{ key: "path", value: { str: path } }]
         };
@@ -277,7 +277,10 @@
             if (res.errors || !res.data?.runPluginTask) return null;
 
             const output = JSON.parse(res.data.runPluginTask);
-            if (output.error || !output.content) return null;
+            if (output.error || !output.content) {
+                console.error("Stash-Buttplug: fetchScript error:", output.error);
+                return null;
+            }
 
             return JSON.parse(output.content);
         } catch (e) { return null; }
