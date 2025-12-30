@@ -1,11 +1,11 @@
 (async function () {
     const { React, ReactDOM, libraries, register, patch, components } = window.PluginApi;
 
-    console.log("stashButtplug: Loading plugin (Interface Integration)...");
+    console.log("stashButtplug: Loading plugin (Interface Stability Mode)...");
 
     // --- 1. Utility Functions ---
     function convertRange(value, fromLow, fromHigh, toLow, toHigh) {
-        return ((value - fromLow) * (toHigh - toLow)) / (fromHigh - fromLow) + toLow;
+        return ((Number(value) - fromLow) * (toHigh - toLow)) / (fromHigh - fromLow) + toLow;
     }
 
     // --- 2. Ported FunscriptPlayer ---
@@ -168,11 +168,11 @@
 
         async connect() {
             await this.initButtplug();
-            if (this._client.connected) return;
+            if (this._client && this._client.connected) return;
             try {
                 await this._client.connect(this._connector);
                 await this._client.startScanning();
-                setTimeout(() => this._client.stopScanning().catch(() => { }), 5000);
+                setTimeout(() => this._client && this._client.stopScanning().catch(() => { }), 5000);
             } catch (e) {
                 console.error("stashButtplug: Connection failed", e);
                 throw e;
@@ -265,7 +265,7 @@
         }
     }
 
-    // --- 5. UI Components ---
+    // --- 5. UI Components (Plain HTML for absolute safety) ---
     const ButtplugSettingsComponent = () => {
         const [config, setConfig] = React.useState(manager._config);
         const [status, setStatus] = React.useState(manager._client?.connected ? "Connected" : "Disconnected");
@@ -279,6 +279,7 @@
                     manager._connector = new ButtplugBrowserWebsocketClientConnector(config.serverUrl);
                 } catch (e) { }
             }
+            alert("Settings Saved");
         };
 
         const toggleConn = async () => {
@@ -292,7 +293,8 @@
             setStatus(manager._client?.connected ? "Connected" : "Disconnected");
         };
 
-        const { Form, Button } = window.PluginApi.libraries.Bootstrap;
+        // Static labels to avoid any translation object issues
+        const statusText = "Status: " + String(status);
 
         return React.createElement("div", { className: "setting-group buttplug-settings mt-3" },
             React.createElement("hr", null),
@@ -301,10 +303,11 @@
             React.createElement("div", { className: "setting" },
                 React.createElement("div", null,
                     React.createElement("h3", null, "Server URL"),
-                    React.createElement("div", { className: "sub-heading" }, "The address of your Intiface Central server")
+                    React.createElement("div", { className: "sub-heading text-muted" }, "The address of your Intiface Central server")
                 ),
                 React.createElement("div", null,
-                    React.createElement(Form.Control, {
+                    React.createElement("input", {
+                        className: "form-control",
                         type: "text",
                         value: String(config.serverUrl || ""),
                         onChange: e => setConfig({ ...config, serverUrl: e.target.value })
@@ -315,10 +318,11 @@
             React.createElement("div", { className: "setting" },
                 React.createElement("div", null,
                     React.createElement("h3", null, "Latency (ms)"),
-                    React.createElement("div", { className: "sub-heading" }, "Adjust timing synchronization")
+                    React.createElement("div", { className: "sub-heading text-muted" }, "Adjust timing synchronization")
                 ),
                 React.createElement("div", null,
-                    React.createElement(Form.Control, {
+                    React.createElement("input", {
+                        className: "form-control",
                         type: "number",
                         value: Number(config.latency || 0),
                         onChange: e => setConfig({ ...config, latency: parseInt(e.target.value) || 0 })
@@ -329,46 +333,50 @@
             React.createElement("div", { className: "setting" },
                 React.createElement("div", null,
                     React.createElement("h3", null, "Auto-Connect"),
-                    React.createElement("div", { className: "sub-heading" }, "Connect on play")
+                    React.createElement("div", { className: "sub-heading text-muted" }, "Connect on play")
                 ),
-                React.createElement("div", null,
-                    React.createElement(Form.Check, {
-                        type: "switch",
-                        id: "bp-auto-connect-switch",
+                React.createElement("div", { className: "value" },
+                    React.createElement("input", {
+                        type: "checkbox",
                         checked: Boolean(config.autoConnect),
                         onChange: e => setConfig({ ...config, autoConnect: e.target.checked })
-                    })
+                    }),
+                    React.createElement("span", { className: "ml-2" }, "Enable")
                 )
             ),
 
-            React.createElement("div", { className: "row mt-3" },
-                React.createElement("div", { className: "col-12 d-flex align-items-center pb-5" },
-                    React.createElement(Button, { className: "mr-2", onClick: handleSave }, "Save Settings"),
-                    React.createElement(Button, {
-                        variant: manager._client?.connected ? "danger" : "success",
+            React.createElement("div", { className: "row mt-3 pb-5" },
+                React.createElement("div", { className: "col-12 d-flex align-items-center" },
+                    React.createElement("button", {
+                        className: "btn btn-primary mr-2",
+                        onClick: handleSave
+                    }, "Save Settings"),
+                    React.createElement("button", {
+                        className: (manager._client?.connected ? "btn btn-danger mr-2" : "btn btn-success mr-2"),
                         onClick: toggleConn
-                    }, manager._client?.connected ? "Disconnect" : "Connect"),
-                    React.createElement("span", { className: "ml-3" }, "Status: " + String(status))
+                    }, (manager._client?.connected ? "Disconnect" : "Connect")),
+                    React.createElement("span", { className: "ml-3 font-weight-bold" }, statusText)
                 )
             )
         );
     };
 
-    // --- 6. UI Integration ---
+    // --- 6. UI Integration (Surgical & Safe) ---
     async function setupUI() {
         patch.after("SettingsInterfacePanel", (props, result) => {
             if (!result || !result.props) return result;
 
             const key = "bp-settings-patch";
-            let children = result.props.children;
-
-            if (!Array.isArray(children)) {
-                result.props.children = [children];
-                children = result.props.children;
-            }
+            // Use React.Children.toArray for safe handling of children
+            const children = React.Children.toArray(result.props.children);
 
             if (!children.some(c => c && c.key === key)) {
+                // Append our component to the end of the children array
                 children.push(React.createElement(ButtplugSettingsComponent, { key: key }));
+
+                // Return a CLONE of the result with the new children list
+                // This is the "React Way" and avoids mutation errors (#31)
+                return React.cloneElement(result, { children: children });
             }
 
             return result;
@@ -379,5 +387,5 @@
     setInterval(hookVideo, 2000);
     new MutationObserver(hookVideo).observe(document.body, { childList: true, subtree: true });
 
-    console.log("stashButtplug: Plugin fully initialized with Interface integration.");
+    console.log("stashButtplug: Stability Plugin fully initialized.");
 })();
