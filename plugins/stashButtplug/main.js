@@ -1,8 +1,5 @@
 (async function () {
-    const { React, ReactDOM, libraries, register, patch, hooks } = window.PluginApi;
-    const { useSettings } = hooks;
-
-    console.log("stashButtplug: Loading plugin (YAML Settings Mode)...");
+    console.log("stashButtplug: Loading plugin (Simple Mode)...");
 
     // --- 1. Utility Functions ---
     function convertRange(value, fromLow, fromHigh, toLow, toHigh) {
@@ -38,8 +35,6 @@
                 });
             }
         }
-
-        get hzRate() { return this._hzRate; }
 
         play(at = 0) {
             if (!this._funscript || !this._funscript.actions) return;
@@ -144,33 +139,45 @@
             };
         }
 
-        updateConfig(newConfig) {
-            const oldUrl = this._config.serverUrl;
-            this._config = { ...this._config, ...newConfig };
-
-            if (this._config.serverUrl !== oldUrl && this._client && this._ButtplugDocs) {
-                const { ButtplugBrowserWebsocketClientConnector } = this._ButtplugDocs;
-                this._connector = new ButtplugBrowserWebsocketClientConnector(this._config.serverUrl);
-                console.log("stashButtplug: Server URL updated to " + this._config.serverUrl);
-                if (this._client.connected) {
-                    this.disconnect().then(() => this.connect()).catch(() => { });
+        async fetchSettings() {
+            try {
+                const query = { query: "{ configuration { plugins } }" };
+                const res = await fetch("/graphql", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(query)
+                });
+                const data = await res.json();
+                const settings = data?.data?.configuration?.plugins?.stashButtplug;
+                if (settings) {
+                    console.log("stashButtplug: Settings fetched from Stash", settings);
+                    const oldUrl = this._config.serverUrl;
+                    this._config = { ...this._config, ...settings };
+                    if (this._config.serverUrl !== oldUrl) {
+                        await this.disconnect();
+                        this._connector = null;
+                    }
                 }
-            }
+            } catch (e) { console.error("stashButtplug: Failed to fetch settings", e); }
         }
 
         async initButtplug() {
             if (this._ButtplugDocs) return;
             try {
                 this._ButtplugDocs = await import('https://cdn.jsdelivr.net/npm/buttplug@3.2.2/dist/web/buttplug.mjs');
-                const { ButtplugClient, ButtplugBrowserWebsocketClientConnector } = this._ButtplugDocs;
+                const { ButtplugClient } = this._ButtplugDocs;
                 this._client = new ButtplugClient("Stash Plugin");
-                this._connector = new ButtplugBrowserWebsocketClientConnector(this._config.serverUrl);
             } catch (e) { console.error("stashButtplug: Library load failure", e); }
         }
 
         async connect() {
+            await this.fetchSettings();
             await this.initButtplug();
             if (!this._client || this._client.connected) return;
+
+            const { ButtplugBrowserWebsocketClientConnector } = this._ButtplugDocs;
+            this._connector = new ButtplugBrowserWebsocketClientConnector(this._config.serverUrl);
+
             try {
                 await this._client.connect(this._connector);
                 console.log("stashButtplug: Connected to " + this._config.serverUrl);
@@ -184,12 +191,6 @@
         async disconnect() {
             if (this._client?.connected) {
                 await this._client.disconnect().catch(() => { });
-            }
-        }
-
-        async checkConnection() {
-            if (this._config.autoConnect && (!this._client || !this._client.connected)) {
-                await this.connect();
             }
         }
 
@@ -223,7 +224,9 @@
         }
 
         async play(at) {
-            await this.checkConnection();
+            if (this._config.autoConnect && (!this._client || !this._client.connected)) {
+                await this.connect();
+            }
             this._funscriptPlayer._offset = -Number(this._config.latency || 0);
             this._funscriptPlayer.play(Math.trunc(Number(at) * 1000));
         }
@@ -244,33 +247,7 @@
 
     const manager = new ButtplugInteractive();
 
-    // --- 4. Settings Watcher ---
-    // This component runs in the background and keeps the manager in sync with Stash settings.
-    const SettingsWatcher = () => {
-        const { plugins } = useSettings();
-
-        React.useEffect(() => {
-            const mySettings = plugins["stashButtplug"];
-            if (mySettings) {
-                console.log("stashButtplug: Syncing settings from Stash...");
-                manager.updateConfig(mySettings);
-            }
-        }, [plugins]);
-
-        return null; // Invisible component
-    };
-
-    // --- 5. UI Integration ---
-    // We inject the SettingsWatcher into the App component.
-    // This is the most stable target and ensures the watcher runs as long as Stash is open.
-    patch.after("App", (props, result) => {
-        return React.createElement(React.Fragment, null,
-            result,
-            React.createElement(SettingsWatcher, { key: "bp-settings-watcher" })
-        );
-    });
-
-    // --- 6. Video lifecycle ---
+    // --- 4. Video lifecycle ---
     let currentVideo = null;
     function hookVideo() {
         const v = document.querySelector('video');
@@ -285,8 +262,12 @@
         }
     }
 
-    setInterval(hookVideo, 2000);
-    new MutationObserver(hookVideo).observe(document.body, { childList: true, subtree: true });
+    // Initial fetch
+    await manager.fetchSettings();
 
-    console.log("stashButtplug: Plugin fully initialized (YAML Mode). Settings are in Settings -> Plugins.");
+    setInterval(hookVideo, 2000);
+    const observer = new MutationObserver(hookVideo);
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    console.log("stashButtplug: Plugin fully initialized (Simple GraphQL Mode).");
 })();
