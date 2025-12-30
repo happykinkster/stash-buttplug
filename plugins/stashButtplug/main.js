@@ -1,7 +1,8 @@
 (async function () {
-    const { React, ReactDOM, libraries, register, patch } = window.PluginApi;
+    const { React, ReactDOM, libraries, register, patch, hooks } = window.PluginApi;
+    const { useSettings } = hooks;
 
-    console.log("stashButtplug: Loading improved plugin (Ghost Mode)...");
+    console.log("stashButtplug: Loading plugin (YAML Settings Mode)...");
 
     // --- 1. Utility Functions ---
     function convertRange(value, fromLow, fromHigh, toLow, toHigh) {
@@ -41,7 +42,7 @@
         get hzRate() { return this._hzRate; }
 
         play(at = 0) {
-            if (!this._funscript) return;
+            if (!this._funscript || !this._funscript.actions) return;
             this.cancelLoop();
             this._paused = false;
             this._prevTime = this._currTime = Date.now();
@@ -107,7 +108,7 @@
         }
 
         advanceKeyframes(currAt) {
-            if (!this._funscript) return false;
+            if (!this._funscript || !this._funscript.actions) return false;
             let currAction = this._funscript.actions[this._actionIndex];
             if (currAt < (currAction.at + this._offset)) return true;
 
@@ -134,22 +135,27 @@
             this._funscriptPlayer = new FunscriptPlayer(async (pos) => {
                 await this.sendToDevice(pos);
             });
-            this._config = this._loadConfig();
-        }
-
-        _loadConfig() {
-            const defaults = {
+            this._config = {
                 serverUrl: "ws://localhost:12345",
                 latency: 0,
                 autoConnect: false,
                 vibeIntensity: 100,
                 rotateIntensity: 100
             };
-            try {
-                const savedString = localStorage.getItem('stash-bp-config');
-                const saved = savedString ? JSON.parse(savedString) : {};
-                return { ...defaults, ...saved };
-            } catch (e) { return defaults; }
+        }
+
+        updateConfig(newConfig) {
+            const oldUrl = this._config.serverUrl;
+            this._config = { ...this._config, ...newConfig };
+
+            if (this._config.serverUrl !== oldUrl && this._client && this._ButtplugDocs) {
+                const { ButtplugBrowserWebsocketClientConnector } = this._ButtplugDocs;
+                this._connector = new ButtplugBrowserWebsocketClientConnector(this._config.serverUrl);
+                console.log("stashButtplug: Server URL updated to " + this._config.serverUrl);
+                if (this._client.connected) {
+                    this.disconnect().then(() => this.connect()).catch(() => { });
+                }
+            }
         }
 
         async initButtplug() {
@@ -159,53 +165,49 @@
                 const { ButtplugClient, ButtplugBrowserWebsocketClientConnector } = this._ButtplugDocs;
                 this._client = new ButtplugClient("Stash Plugin");
                 this._connector = new ButtplugBrowserWebsocketClientConnector(this._config.serverUrl);
-            } catch (e) { console.error("stashButtplug: Library error", e); }
+            } catch (e) { console.error("stashButtplug: Library load failure", e); }
         }
 
         async connect() {
             await this.initButtplug();
-            if (this._client && this._client.connected) return;
+            if (!this._client || this._client.connected) return;
             try {
                 await this._client.connect(this._connector);
+                console.log("stashButtplug: Connected to " + this._config.serverUrl);
                 await this._client.startScanning().catch(() => { });
                 setTimeout(() => {
-                    if (this._client && this._client.connected) {
-                        this._client.stopScanning().catch(() => { });
-                    }
+                    if (this._client?.connected) this._client.stopScanning().catch(() => { });
                 }, 5000);
-            } catch (e) {
-                console.error("stashButtplug: Connect failure", e);
-                // We don't throw here to avoid crashing any external loop
-            }
+            } catch (e) { console.error("stashButtplug: Connection failed", e); }
         }
 
         async disconnect() {
-            if (this._client && this._client.connected) {
+            if (this._client?.connected) {
                 await this._client.disconnect().catch(() => { });
             }
         }
 
         async checkConnection() {
             if (this._config.autoConnect && (!this._client || !this._client.connected)) {
-                await this.connect().catch(() => { });
+                await this.connect();
             }
         }
 
         async sendToDevice(pos) {
             if (!this._client || !this._client.connected) return;
-            const intensity = Number(this._config.vibeIntensity || 100) / 100;
+            const vibeScale = Number(this._config.vibeIntensity || 100) / 100;
             const rotateScale = Number(this._config.rotateIntensity || 100) / 100;
             const position = Number(pos) / 100;
 
             for (const device of this._client.devices) {
                 try {
-                    if (device.vibrateAttributes && device.vibrateAttributes.length > 0) {
-                        await device.vibrate(position * intensity).catch(() => { });
+                    if (device.vibrateAttributes?.length > 0) {
+                        await device.vibrate(position * vibeScale).catch(() => { });
                     }
-                    if (device.linearAttributes && device.linearAttributes.length > 0) {
+                    if (device.linearAttributes?.length > 0) {
                         await device.linear(position, 16).catch(() => { });
                     }
-                    if (device.rotateAttributes && device.rotateAttributes.length > 0) {
+                    if (device.rotateAttributes?.length > 0) {
                         await device.rotate(position * rotateScale, true).catch(() => { });
                     }
                 } catch (e) { }
@@ -228,7 +230,7 @@
 
         async pause() {
             this._funscriptPlayer.pause();
-            if (this._client && this._client.connected) {
+            if (this._client?.connected) {
                 for (const device of this._client.devices) {
                     await device.stop().catch(() => { });
                 }
@@ -242,136 +244,33 @@
 
     const manager = new ButtplugInteractive();
 
-    // --- 5. UI Component (Isolated) ---
-    const ButtplugSettingsComponent = () => {
-        const [config, setConfig] = React.useState(() => ({ ...manager._config }));
-        const [connStatus, setConnStatus] = React.useState("Disconnected");
+    // --- 4. Settings Watcher ---
+    // This component runs in the background and keeps the manager in sync with Stash settings.
+    const SettingsWatcher = () => {
+        const { plugins } = useSettings();
 
         React.useEffect(() => {
-            const i = setInterval(() => {
-                const isConnected = !!(manager._client && manager._client.connected);
-                setConnStatus(isConnected ? "Connected" : "Disconnected");
-            }, 1000);
-            return () => clearInterval(i);
-        }, []);
-
-        const handleSave = () => {
-            try {
-                localStorage.setItem('stash-bp-config', JSON.stringify(config));
-                manager._config = config;
-                if (manager._client && manager._ButtplugDocs) {
-                    const { ButtplugBrowserWebsocketClientConnector } = manager._ButtplugDocs;
-                    manager._connector = new ButtplugBrowserWebsocketClientConnector(config.serverUrl);
-                }
-                alert("Settings Saved successfully.");
-            } catch (err) {
-                alert("Error saving settings.");
+            const mySettings = plugins["stashButtplug"];
+            if (mySettings) {
+                console.log("stashButtplug: Syncing settings from Stash...");
+                manager.updateConfig(mySettings);
             }
-        };
+        }, [plugins]);
 
-        const toggleConn = async () => {
-            if (manager._client && manager._client.connected) {
-                await manager.disconnect();
-            } else {
-                await manager.connect();
-            }
-        };
-
-        return React.createElement("div", { className: "buttplug-settings-panel shadow-sm p-4 bg-dark rounded border border-secondary mt-4 mb-5" },
-            React.createElement("h1", { className: "mb-3" }, "Buttplug.io (Intiface)"),
-            React.createElement("hr", { className: "mb-4" }),
-
-            // Server URL
-            React.createElement("div", { className: "row mb-3" },
-                React.createElement("div", { className: "col-6" },
-                    React.createElement("h4", null, "Server URL"),
-                    React.createElement("div", { className: "text-muted small" }, "ws://localhost:12345")
-                ),
-                React.createElement("div", { className: "col-6" },
-                    React.createElement("input", {
-                        className: "form-control",
-                        type: "text",
-                        value: String(config.serverUrl || ""),
-                        onChange: e => setConfig({ ...config, serverUrl: String(e.target.value) })
-                    })
-                )
-            ),
-
-            // Latency
-            React.createElement("div", { className: "row mb-3" },
-                React.createElement("div", { className: "col-6" }, React.createElement("h4", null, "Latency (ms)")),
-                React.createElement("div", { className: "col-6" },
-                    React.createElement("input", {
-                        className: "form-control",
-                        type: "number",
-                        value: Number(config.latency || 0),
-                        onChange: e => setConfig({ ...config, latency: parseInt(e.target.value) || 0 })
-                    })
-                )
-            ),
-
-            // Auto Connect
-            React.createElement("div", { className: "row mb-3" },
-                React.createElement("div", { className: "col-6" }, React.createElement("h4", null, "Auto-Connect")),
-                React.createElement("div", { className: "col-6 d-flex align-items-center" },
-                    React.createElement("input", {
-                        type: "checkbox",
-                        className: "mr-2",
-                        checked: Boolean(config.autoConnect),
-                        onChange: e => setConfig({ ...config, autoConnect: !!e.target.checked })
-                    }),
-                    React.createElement("span", null, "Automatically connect when video plays")
-                )
-            ),
-
-            // Actions
-            React.createElement("div", { className: "d-flex align-items-center mt-4 pt-3" },
-                React.createElement("button", {
-                    className: "btn btn-primary mr-2 px-4",
-                    onClick: handleSave
-                }, "Save Settings"),
-                React.createElement("button", {
-                    className: (manager._client && manager._client.connected) ? "btn btn-danger mr-2 px-4" : "btn btn-success mr-2 px-4",
-                    onClick: toggleConn
-                }, (manager._client && manager._client.connected) ? "Disconnect" : "Connect"),
-                React.createElement("span", { className: "ml-3 font-weight-bold" }, "Status: " + String(connStatus))
-            )
-        );
+        return null; // Invisible component
     };
 
-    // --- 6. Ghost Injection Bridge ---
-    // This logic performs a side-effect injection into the DOM.
-    // It returns the original React result UNTOUCHED to prevent Error #31.
-    async function injectUI() {
-        // We look for the "Interface" panel's content
-        // The last .setting-section is usually the one where Handy options reside.
-        const settingsContent = document.querySelector(".settings-content");
-        if (!settingsContent) return;
-
-        // Check if we are already injected to avoid duplicates
-        if (document.getElementById("bp-ghost-root")) return;
-
-        console.log("stashButtplug: Found settings content. Injecting ghost UI...");
-
-        const ghostRoot = document.createElement("div");
-        ghostRoot.id = "bp-ghost-root";
-
-        // Append to the end of the settings content
-        settingsContent.appendChild(ghostRoot);
-
-        // Render into the ghost root using the core's React/ReactDOM
-        ReactDOM.render(React.createElement(ButtplugSettingsComponent, null), ghostRoot);
-    }
-
-    // We use the patch only as a TRIGGER, we never modify the return value.
-    patch.after("SettingsInterfacePanel", (props, result) => {
-        // This is safe. side-effects inside a patch are allowed as long as
-        // we return the original 'result' exactly.
-        setTimeout(injectUI, 100);
-        return result;
+    // --- 5. UI Integration ---
+    // We inject the SettingsWatcher into the App component.
+    // This is the most stable target and ensures the watcher runs as long as Stash is open.
+    patch.after("App", (props, result) => {
+        return React.createElement(React.Fragment, null,
+            result,
+            React.createElement(SettingsWatcher, { key: "bp-settings-watcher" })
+        );
     });
 
-    // --- 7. Video lifecycle ---
+    // --- 6. Video lifecycle ---
     let currentVideo = null;
     function hookVideo() {
         const v = document.querySelector('video');
@@ -389,5 +288,5 @@
     setInterval(hookVideo, 2000);
     new MutationObserver(hookVideo).observe(document.body, { childList: true, subtree: true });
 
-    console.log("stashButtplug: Ghost Mode Active. No more React Error #31.");
+    console.log("stashButtplug: Plugin fully initialized (YAML Mode). Settings are in Settings -> Plugins.");
 })();
