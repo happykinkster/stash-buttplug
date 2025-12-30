@@ -17,8 +17,8 @@ A lightweight Stash plugin that adds WebXR VR support for modern VR headsets (Qu
 1. Go to **Settings > Plugins**.
 2. Click **Sources** (top right) -> **Add Source**.
 3. Enter the following details:
-   - **Name**: stashVR
-   - **URL**: `https://happykinkster.github.io/stash-buttplug/main/index.yml`
+   - **Name**: stashInteractive
+   - **URL**: `https://happykinkster.github.io/stashInteractive/main/index.yml`
 4. Click **Confirm**.
 5. Go back to the **Available** plugins tab.
 6. Install **stashVR**.

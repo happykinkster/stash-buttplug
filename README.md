@@ -1,4 +1,4 @@
-# Stash-Buttplug Repository
+# stashInteractive Repository
 
 This repository hosts the **stashButtplug** and **stashVR** plugin for StashApp.
 
@@ -9,8 +9,8 @@ Add this repository as a plugin source in StashApp:
 1. Go to **Settings > Plugins**.
 2. Click **Sources** -> **Add Source**.
 3. Enter:
-   - **Name**: stashButtplug
-   - **URL**: `https://happykinkster.github.io/stash-buttplug/main/index.yml`
+   - **Name**: stashInteractive
+   - **URL**: `https://happykinkster.github.io/stashInteractive/main/index.yml`
 4. install the **stashButtplug** and **stashVR** plugin from the **Available** tab.
 
 ## Plugin Details
