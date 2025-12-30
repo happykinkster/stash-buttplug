@@ -1,12 +1,15 @@
 # Stash-Buttplug Plugin
 
-This plugin connects StashApp to Buttplug.io (Intiface) to control devices like the Kiiroo Keon using Funscripts synced with your scenes.
+This plugin connects StashApp to Buttplug.io (Intiface) to control devices like the Kiiroo Keon, vibrators, and rotators using Funscripts synced with your scenes. This version is built using high-precision logic ported from the Stash core.
 
 ## Features
-- **Frontend Integration**: Adds a "Buttplug.io" button to the Stash navbar to connect/disconnect.
-- **Funscript Support**: Automatically finds the funscript associated with the playing scene and syncs it.
-- **Direct Integration**: Runs entirely in the browser, fetching funscripts directly from Stash.
-- **Intiface Support**: Connects to standard Intiface Central websocket (`ws://localhost:12345`).
+
+- **High Precision**: Uses the `FunscriptPlayer` logic from Stash core for smooth interpolation and sub-millisecond sync.
+- **Native Settings**: Integrates a dedicated "Buttplug.io" tab into the Stash settings sidebar (`Settings -> Buttplug.io`).
+- **Deep Integration**: Hooks directly into video lifecycle events (play, pause, seek, timeupdate) for instant responsiveness.
+- **Multi-Device Support**: Controls Linear (Strokers), Vibration, and Rotation devices simultaneously.
+- **Smart Fallbacks**: Generates vibration and rotation commands from linear strokes if specific scripts are missing.
+- **Standalone**: Runs entirely in the browser using the latest `Buttplug.io` client, keeping your Stash installation lean.
 
 ## Installation
 
@@ -16,7 +19,7 @@ This plugin connects StashApp to Buttplug.io (Intiface) to control devices like 
 2. Click **Sources** (top right) -> **Add Source**.
 3. Enter the following details:
    - **Name**: stashButtplug
-   - **URL**:  `https://happykinkster.github.io/stash-buttplug/main/index.yml`
+   - **URL**: `https://happykinkster.github.io/stash-buttplug/main/index.yml`
 4. Click **Confirm**.
 5. Go back to the **Available** plugins tab.
 6. Install **stashButtplug**.
@@ -31,29 +34,30 @@ This plugin connects StashApp to Buttplug.io (Intiface) to control devices like 
 ## Usage
 
 1. **Start Intiface Central**: Ensure Intiface Central is running (Port 12345, WebSockets enabled).
-2. **Connect Buttplug.io**:
-   - Refresh Stash.
-   - Click the **🔌 Buttplug.io** button in the top navbar (or in the settings menu/sidebar depending on your theme).
-   - It should turn Green when connected.
+2. **Configure Connection**:
+   - Go to **Settings > Buttplug.io**.
+   - Ensure the **Server URL** is correct (Default: `ws://localhost:12345`).
+   - Click **Connect**. It should show "Status: Connected".
 3. **Play**:
    - Open a scene with a funscript.
-   - Play the video. Your device should respond!
+   - Play the video. Your devices will sync automatically!
 
-## Settings
-Click the **Gear (⚙️)** icon next to the Buttplug.io button to configure:
-- **Server URL**: The address of your Intiface Central server (Default: `ws://localhost:12345`).
-- **Latency**: Adjust timing synchronization (ms).
-- **Auto-Connect**: Connect on load.
-- **Fallback Behavior**:
-  - **Fallback Vibration/Rotation**: Use the main script to generate vibrations/rotations.
-  - **Intensity/Speed**: Set the max intensity/speed for the fallback generation.
+## Advanced Settings
+
+Located in **Settings > Buttplug.io**:
+
+- **Server URL**: The address of your Intiface Central server.
+- **Latency**: Adjust timing synchronization (ms) to compensate for network or device delay.
+- **Auto-Connect on Play**: When enabled, playing a video will automatically attempt to connect to Buttplug if not already connected.
 
 ## Troubleshooting
 
-- **No "Buttplug.io" Button**: Check F12 Console for errors. Ensure `main.js` is loaded.
-- **Not Loading Script**: Ensure the scene has a funscript assigned in Stash. Check F12 Console for "Funscript loaded!" message.
-- **Connection Error**: Ensure Intiface is listening on `ws://localhost:12345`.
+- **No "Buttplug.io" Tab**: Refresh the page. Check the browser console (F12) for "stashButtplug: Loading improved plugin...".
+- **Not Syncing**: Ensure the scene has a funscript assigned in Stash. This plugin fetches the script from `/scene/<ID>/funscript`.
+- **Connection Error**: Ensure Intiface is listening on `ws://localhost:12345` and that "Enable WebSockets" is checked in Intiface settings.
 
 ## Requirements
-- StashApp
+
+- StashApp v0.20+
 - Intiface Central (or Engine) running locally.
+- Modern desktop browser.

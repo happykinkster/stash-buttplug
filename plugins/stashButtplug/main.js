@@ -1,507 +1,385 @@
 (async function () {
-    console.log("stashButtplug: Loading...");
+    const { React, ReactDOM, libraries, register, patch, components } = window.PluginApi;
+    const { Button, Form, Modal, Nav, Tab } = libraries.Bootstrap;
 
-    // 1. Dynamic Import of Buttplug
-    let Buttplug;
-    try {
-        Buttplug = await import('https://cdn.jsdelivr.net/npm/buttplug@3.2.2/dist/web/buttplug.mjs');
-    } catch (e) {
-        console.error("stashButtplug: Failed to load Buttplug library", e);
-        return;
+    console.log("stashButtplug: Loading improved plugin...");
+
+    // --- 1. Utility Functions ---
+    function convertRange(value, fromLow, fromHigh, toLow, toHigh) {
+        return ((value - fromLow) * (toHigh - toLow)) / (fromHigh - fromLow) + toLow;
     }
 
-    const { ButtplugClient, ButtplugBrowserWebsocketClientConnector } = Buttplug;
-
-    // 2. Global State
-    let client = null;
-    let currentScript = null; // Object: { main: script, vibrate: script, rotate: script }
-
-    // State for indices
-    let state = {
-        mainIdx: 0,
-        vibeIdx: 0,
-        rotateIdx: 0
-    };
-
-    let videoEl = null;
-
-    // Default Config
-    const defaults = {
-        serverUrl: "ws://localhost:12345",
-        latency: 0,
-        autoConnect: false,
-        debug: false,
-        // Fallback Configuration
-        fallbackVibration: true, // Use stroke speed for vibration if no vibrate script
-        fallbackRotation: true,  // Use stroke speed for rotation if no rotate script
-        vibeIntensity: 100, // %
-        rotateIntensity: 100 // %
-    };
-
-    // Load Config
-    let config = { ...defaults };
-    try {
-        const saved = JSON.parse(localStorage.getItem('stash-bp-config'));
-        if (saved) config = { ...config, ...saved };
-    } catch (e) { }
-
-
-    // 3. UI Setup
-    async function setupUI() {
-        // Wait up to 10s for UI
-        let attempts = 0;
-        let nav = null;
-        while (attempts < 20) {
-            // Try standard selector
-            nav = document.querySelector('.navbar-nav');
-
-            // Fallback: Try to find the container of the "Settings" or "System" link
-            if (!nav) {
-                const settingsLink = document.querySelector('a[href="/settings"]');
-                if (settingsLink) {
-                    nav = settingsLink.closest('ul') || settingsLink.closest('div.d-flex');
-                }
-            }
-
-            if (nav) break;
-
-            await new Promise(r => setTimeout(r, 500));
-            attempts++;
+    // --- 2. Ported FunscriptPlayer ---
+    class FunscriptPlayer {
+        constructor(posCallback, offset = 0, hzRate = 60) {
+            this._posCallback = posCallback;
+            this._offset = offset;
+            this._hzRate = hzRate;
+            this._funscript = undefined;
+            this._paused = true;
+            this._currTime = 0;
+            this._currAt = 0;
+            this._prevTime = 0;
+            this._prevAt = 0;
+            this._actionIndex = -1;
+            this._prevAction = null;
+            this._prevPos = null;
+            this._timeoutId = undefined;
+            this._startPos = 50;
         }
 
-        if (!nav) {
-            console.error("stashButtplug: Navbar not found. Aborting UI setup.");
-            return;
-        }
-
-        // Settings Modal HTML
-        const modalHtml = `
-        <div id="bp-settings-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; align-items:center; justify-content:center;">
-            <div style="background:#222; padding:20px; border-radius:8px; width:400px; color:#fff; border:1px solid #555; text-align: left;">
-                <h4 style="margin-top:0;">Buttplug Settings</h4>
-                <hr style="background:#555;">
-                
-                <div class="form-group" style="margin-bottom:15px;">
-                    <label style="display:block; margin-bottom:5px;">Server URL</label>
-                    <input type="text" id="bp-in-url" class="form-control" style="width:100%; padding:5px; background:#333; color:#fff; border:1px solid #555;" value="${config.serverUrl}">
-                </div>
-                
-                <div class="form-group" style="margin-bottom:15px;">
-                    <label style="display:block; margin-bottom:5px;">Latency (ms)</label>
-                    <input type="number" id="bp-in-latency" class="form-control" style="width:100%; padding:5px; background:#333; color:#fff; border:1px solid #555;" value="${config.latency}">
-                </div>
-
-                 <hr style="background:#555; margin: 15px 0;">
-                 <h5 style="margin-bottom:10px;">Fallback Behavior</h5>
-                 <p style="font-size:0.8em; color:#aaa;">If specific scripts (e.g. .vibrate.funscript) are missing, should we generate commands from the main script?</p>
-
-                <!-- Fallback Vibrator -->
-                <div class="form-check" style="margin-bottom:5px;">
-                    <input type="checkbox" id="bp-in-fb-vibe" ${config.fallbackVibration ? 'checked' : ''}> 
-                    <label for="bp-in-fb-vibe" style="display:inline; margin-left:5px;">Fallback Vibration</label>
-                </div>
-                <div style="margin-left: 20px; margin-bottom:10px;">
-                    <label style="font-size:0.8em; color:#aaa;">Max Intensity: <span id="bp-val-vibe">${config.vibeIntensity}</span>%</label>
-                    <input type="range" id="bp-in-vibe-val" min="10" max="100" value="${config.vibeIntensity}" style="width:100%;">
-                </div>
-
-                <!-- Fallback Rotator -->
-                <div class="form-check" style="margin-bottom:5px;">
-                    <input type="checkbox" id="bp-in-fb-rotate" ${config.fallbackRotation ? 'checked' : ''}> 
-                    <label for="bp-in-fb-rotate" style="display:inline; margin-left:5px;">Fallback Rotation</label>
-                </div>
-                 <div style="margin-left: 20px; margin-bottom:15px;">
-                    <label style="font-size:0.8em; color:#aaa;">Max Speed: <span id="bp-val-rotate">${config.rotateIntensity}</span>%</label>
-                    <input type="range" id="bp-in-rotate-val" min="10" max="100" value="${config.rotateIntensity}" style="width:100%;">
-                </div>
-
-                <hr style="background:#555; margin: 15px 0;">
-
-                <div class="form-check" style="margin-bottom:20px;">
-                    <input type="checkbox" id="bp-in-auto" ${config.autoConnect ? 'checked' : ''}> 
-                    <label for="bp-in-auto" style="display:inline; margin-left:5px;">Auto-Connect on Load</label>
-                </div>
-                
-                <div style="display:flex; justify-content:flex-end; gap:10px;">
-                    <button id="bp-btn-cancel" class="btn btn-secondary" style="padding:5px 15px; cursor:pointer;">Cancel</button>
-                    <button id="bp-btn-save" class="btn btn-primary" style="padding:5px 15px; cursor:pointer; background:#007bff; color:white; border:none;">Save</button>
-                </div>
-            </div>
-        </div>
-        `;
-
-        // Append modal to body
-        const div = document.createElement('div');
-        div.innerHTML = modalHtml;
-        document.body.appendChild(div);
-
-        // Slider listeners
-        document.getElementById('bp-in-vibe-val').oninput = (e) => document.getElementById('bp-val-vibe').innerText = e.target.value;
-        document.getElementById('bp-in-rotate-val').oninput = (e) => document.getElementById('bp-val-rotate').innerText = e.target.value;
-
-        // Inputs logic
-        document.getElementById('bp-btn-save').onclick = () => {
-            config.serverUrl = document.getElementById('bp-in-url').value;
-            config.latency = parseInt(document.getElementById('bp-in-latency').value) || 0;
-            config.autoConnect = document.getElementById('bp-in-auto').checked;
-
-            // New settings
-            config.fallbackVibration = document.getElementById('bp-in-fb-vibe').checked;
-            config.fallbackRotation = document.getElementById('bp-in-fb-rotate').checked;
-            config.vibeIntensity = parseInt(document.getElementById('bp-in-vibe-val').value) || 100;
-            config.rotateIntensity = parseInt(document.getElementById('bp-in-rotate-val').value) || 100;
-
-            localStorage.setItem('stash-bp-config', JSON.stringify(config));
-            document.getElementById('bp-settings-modal').style.display = 'none';
-        };
-        document.getElementById('bp-btn-cancel').onclick = () => {
-            document.getElementById('bp-settings-modal').style.display = 'none';
-        };
-
-        // Container
-        const container = document.createElement('li');
-        container.className = 'nav-item d-flex align-items-center';
-
-        // Connect Button
-        const btn = document.createElement('button');
-        btn.className = 'btn btn-secondary nav-link mr-2';
-        btn.innerHTML = `🔌 Buttplug.io`;
-        btn.onclick = toggleConnection;
-
-        // Status
-        const status = document.createElement('span');
-        status.id = 'bp-status';
-        status.style.marginRight = '10px';
-        status.style.color = 'red';
-        status.style.fontSize = '0.8em';
-        status.innerText = 'Disconnected';
-
-        // Settings Button
-        const setBtn = document.createElement('button');
-        setBtn.className = 'btn btn-sm btn-dark';
-        setBtn.innerHTML = '⚙️';
-        setBtn.onclick = () => {
-            // Populate fields
-            document.getElementById('bp-in-url').value = config.serverUrl;
-            document.getElementById('bp-in-latency').value = config.latency;
-            document.getElementById('bp-in-auto').checked = config.autoConnect;
-
-            // Populate New settings
-            document.getElementById('bp-in-fb-vibe').checked = config.fallbackVibration;
-            document.getElementById('bp-in-fb-rotate').checked = config.fallbackRotation;
-
-            document.getElementById('bp-in-vibe-val').value = config.vibeIntensity || 100;
-            document.getElementById('bp-val-vibe').innerText = config.vibeIntensity || 100;
-
-            document.getElementById('bp-in-rotate-val').value = config.rotateIntensity || 100;
-            document.getElementById('bp-val-rotate').innerText = config.rotateIntensity || 100;
-
-            document.getElementById('bp-settings-modal').style.display = 'flex';
-        };
-
-        container.appendChild(btn);
-        container.appendChild(status);
-        container.appendChild(setBtn);
-        nav.appendChild(container); // Add to nav
-
-        if (config.autoConnect) {
-            setTimeout(toggleConnection, 1000);
-        }
-    }
-
-    async function toggleConnection() {
-        const status = document.getElementById('bp-status');
-        if (client && client.connected) {
-            await client.disconnect();
-            status.innerText = 'Disconnected';
-            status.style.color = 'red';
-            client = null;
-        } else {
-            status.innerText = '...';
-            client = new ButtplugClient("Stash Client");
-
-            try {
-                const connector = new ButtplugBrowserWebsocketClientConnector(config.serverUrl);
-                await client.connect(connector);
-                status.innerText = 'Connected';
-                status.style.color = '#28a745';
-                console.log("stashButtplug: Connected to Server");
-
-                await client.startScanning();
-            } catch (e) {
-                console.error(e);
-                status.innerText = 'Err';
-            }
-        }
-    }
-
-    // 4. Stash GQL Helper
-
-
-    // Helper: Poll Task Status
-    async function pollTask(taskId) {
-        const query = `query FindTask($id: ID!) {
-            findTask(id: $id) {
-                status
-                output
-            }
-        }`;
-
-        let attempts = 0;
-        while (attempts < 20) { // 10 seconds max
-            await new Promise(r => setTimeout(r, 500));
-            try {
-                const req = await fetch('/graphql', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query, variables: { id: taskId } })
+        set funscript(json) {
+            this.pause();
+            this._funscript = json;
+            if (this._funscript?.inverted) {
+                this._funscript.actions = this._funscript.actions.map(a => {
+                    a.pos = convertRange(a.pos, 0, 100, 100, 0);
+                    return a;
                 });
-                const res = await req.json();
-                const task = res.data?.findTask;
+            }
+        }
 
-                if (!task) return null;
+        get hzRate() { return this._hzRate; }
 
-                if (task.status === 'SUCCEEDED') {
-                    // Output is usually the JSON content string
-                    return task.output;
-                } else if (task.status === 'FAILED') {
-                    console.error("stashButtplug: Task Failed", task.output);
-                    return null;
+        play(at = 0) {
+            if (!this._funscript) return;
+            this.cancelLoop();
+            this._paused = false;
+            this._prevTime = this._currTime = Date.now();
+            this._prevAt = this._currAt = at;
+            this._actionIndex = this._funscript.actions.findIndex(
+                action => (at < (action.at + this._offset))
+            );
+            this._prevAction = { at, pos: this._prevPos || this._startPos };
+            this.runLoop();
+        }
+
+        playSync(at) {
+            this._prevTime = this._currTime;
+            this._prevAt = this._currAt;
+            this._currTime = Date.now();
+            this._currAt = at;
+        }
+
+        pause() {
+            this._paused = true;
+            this.cancelLoop();
+        }
+
+        cancelLoop() {
+            if (this._timeoutId) {
+                clearTimeout(this._timeoutId);
+                this._timeoutId = undefined;
+            }
+        }
+
+        nextAt(now) {
+            const nowTimeDelta = now - this._currTime;
+            const lastTimeDelta = this._currTime - this._prevTime;
+            const lastAtDelta = this._currAt - this._prevAt;
+            if (lastTimeDelta === 0 || lastAtDelta === 0) {
+                return this._currAt + nowTimeDelta;
+            }
+            return this._currAt + Math.trunc(convertRange(nowTimeDelta, 0, lastTimeDelta, 0, lastAtDelta));
+        }
+
+        runLoop() {
+            this._timeoutId = setTimeout(() => {
+                if (this._paused || !this._funscript || !this._prevAction || this._actionIndex < 0) return;
+
+                const at = this.nextAt(Date.now());
+                if (!this.advanceKeyframes(at)) return;
+
+                const currAction = this._funscript.actions[this._actionIndex];
+                let pos = this._prevAction.pos;
+                if (this._prevAction.at !== currAction.at && this._prevAction.pos !== currAction.pos) {
+                    pos = Math.round(convertRange(at,
+                        this._prevAction.at + this._offset, currAction.at + this._offset,
+                        this._prevAction.pos, currAction.pos
+                    ));
                 }
-                // If RUNNING/PENDING/QUEUED, continue
-            } catch (e) { console.error(e); }
-            attempts++;
+
+                if (pos !== this._prevPos && pos >= 0 && pos <= 100) {
+                    this._posCallback(pos);
+                    this._prevPos = pos;
+                }
+                this.runLoop();
+            }, 1000 / this._hzRate);
         }
-        console.error("stashButtplug: Task Polling Timed Out");
-        return null;
-    }
 
+        advanceKeyframes(currAt) {
+            if (!this._funscript) return false;
+            let currAction = this._funscript.actions[this._actionIndex];
+            if (currAt < (currAction.at + this._offset)) return true;
 
+            let isAtEndOfActions = this._actionIndex >= (this._funscript.actions.length - 1);
+            if (isAtEndOfActions) return false;
 
-    // 5. Funscript Loader (Direct URL)
-    async function loadFunscript() {
-        const matches = window.location.pathname.match(/\/scenes\/(\d+)/);
-        if (!matches) {
-            currentScript = null;
-            return;
-        }
-        const sceneId = matches[1];
-        const scriptUrl = `/scene/${sceneId}/funscript`;
+            do {
+                this._prevAction = currAction;
+                this._actionIndex++;
+                currAction = this._funscript.actions[this._actionIndex];
+                isAtEndOfActions = this._actionIndex >= this._funscript.actions.length - 1;
+            } while ((currAt < (this._prevAction.at + this._offset)) && !isAtEndOfActions);
 
-        try {
-            console.log(`stashButtplug: Fetching funscript from ${scriptUrl}`);
-            const req = await fetch(scriptUrl);
-
-            if (req.status !== 200) {
-                console.log(`stashButtplug: No funscript found (Status ${req.status}).`);
-                currentScript = null;
-                return;
-            }
-
-            const mainScript = await req.json();
-
-            if (!mainScript.actions || !Array.isArray(mainScript.actions)) {
-                console.error("stashButtplug: Invalid funscript format.", mainScript);
-                currentScript = null;
-                return;
-            }
-
-            // Direct URL only provides the main script.
-            // We explicitely set vibrate/rotate to null to trigger internal fallback logic.
-            currentScript = {
-                main: mainScript,
-                vibrate: null,
-                rotate: null
-            };
-
-            console.log(`stashButtplug: Loaded Main Script (${mainScript.actions.length} actions). Fallbacks enabled.`);
-
-        } catch (e) {
-            console.error("stashButtplug: Exception loading funscript", e);
-            currentScript = null;
+            return currAt < (currAction.at + this._offset);
         }
     }
 
-    function updateIndex(script, idx, time) {
-        if (!script) return 0;
-        let i = idx;
-
-        // Reset if wrapped
-        if (i >= script.actions.length) i = 0;
-        // Or if time jumped back
-        if (i > 0 && script.actions[i].at > time + 1000) i = 0;
-
-        while (i < script.actions.length - 1 && script.actions[i].at < time) {
-            i++;
-        }
-        return i;
-    }
-
-    // Helper: Stop all devices
-    function stopAllDevices() {
-        if (client && client.connected) {
-            client.devices.forEach(d => {
-                if (d.vibrate) d.vibrate(0).catch(() => { });
-                if (d.rotate) d.rotate(0, true).catch(() => { });
-                if (d.stop) d.stop().catch(() => { });
+    // --- 3. Ported ButtplugInteractive ---
+    class ButtplugInteractive {
+        constructor() {
+            this._client = null;
+            this._connector = null;
+            this._ButtplugDocs = null;
+            this._funscriptPlayer = new FunscriptPlayer(async (pos) => {
+                await this.sendToDevice(pos);
             });
+            this._config = this.loadConfig();
+        }
+
+        loadConfig() {
+            const defaults = {
+                serverUrl: "ws://localhost:12345",
+                latency: 0,
+                autoConnect: false,
+                fallbackVibration: true,
+                fallbackRotation: true,
+                vibeIntensity: 100,
+                rotateIntensity: 100
+            };
+            try {
+                const saved = JSON.parse(localStorage.getItem('stash-bp-config'));
+                return { ...defaults, ...saved };
+            } catch (e) { return defaults; }
+        }
+
+        async initButtplug() {
+            if (this._ButtplugDocs) return;
+            try {
+                this._ButtplugDocs = await import('https://cdn.jsdelivr.net/npm/buttplug@3.2.2/dist/web/buttplug.mjs');
+                const { ButtplugClient, ButtplugBrowserWebsocketClientConnector } = this._ButtplugDocs;
+                this._client = new ButtplugClient("Stash Plugin");
+                this._connector = new ButtplugBrowserWebsocketClientConnector(this._config.serverUrl);
+
+                this._client.addListener("deviceadded", (device) => console.log(`[buttplug] Device Added: ${device.name}`));
+                this._client.addListener("deviceremoved", (device) => console.log(`[buttplug] Device Removed: ${device.name}`));
+            } catch (e) {
+                console.error("stashButtplug: Failed to load Buttplug library", e);
+            }
+        }
+
+        async connect() {
+            await this.initButtplug();
+            if (this._client.connected) return;
+            try {
+                await this._client.connect(this._connector);
+                await this._client.startScanning();
+                setTimeout(() => this._client.stopScanning().catch(() => { }), 5000);
+            } catch (e) {
+                console.error("stashButtplug: Connection failed", e);
+                throw e;
+            }
+        }
+
+        async disconnect() {
+            if (this._client?.connected) {
+                await this._client.disconnect();
+            }
+        }
+
+        async checkConnection() {
+            if (!this._client?.connected && this._config.autoConnect) {
+                await this.connect().catch(() => { });
+            }
+        }
+
+        async sendToDevice(pos) {
+            if (!this._client?.connected) return;
+            for (const device of this._client.devices) {
+                if (device.vibrateAttributes.length > 0) {
+                    const intensity = (pos / 100) * (this._config.vibeIntensity / 100);
+                    await device.vibrate(intensity).catch(() => { });
+                }
+                if (device.linearAttributes.length > 0) {
+                    const duration = Math.round(1000 / this._funscriptPlayer.hzRate);
+                    await device.linear(pos / 100, duration).catch(() => { });
+                }
+                if (device.rotateAttributes.length > 0) {
+                    const speed = (pos / 100) * (this._config.rotateIntensity / 100);
+                    await device.rotate(speed, true).catch(() => { });
+                }
+            }
+        }
+
+        async uploadScript(funscriptPath) {
+            if (!funscriptPath) {
+                this._funscriptPlayer.funscript = undefined;
+                return;
+            }
+            try {
+                const json = await fetch(funscriptPath).then(r => r.json());
+                this._funscriptPlayer.funscript = json;
+            } catch (e) { console.error("stashButtplug: Failed to fetch funscript", e); }
+        }
+
+        async play(at) {
+            await this.checkConnection();
+            this._funscriptPlayer.offset = -this._config.latency;
+            this._funscriptPlayer.play(Math.trunc(at * 1000));
+        }
+
+        async pause() {
+            this._funscriptPlayer.pause();
+            if (this._client?.connected) {
+                for (const device of this._client.devices) {
+                    await device.stop().catch(() => { });
+                }
+            }
+        }
+
+        sync(at) {
+            this._funscriptPlayer.playSync(Math.trunc(at * 1000));
         }
     }
 
-    let wasPaused = true;
+    // --- 4. Interactive Manager ---
+    const manager = new ButtplugInteractive();
+    let currentVideo = null;
 
-    // 6. Sync Logic
-    function tick() {
-        if (!client || !client.connected || !currentScript || !videoEl) {
-            requestAnimationFrame(tick);
-            return;
-        }
-
-        // Handle Pause
-        if (videoEl.paused) {
-            if (!wasPaused) {
-                console.log("stashButtplug: Video paused, stopping devices.");
-                stopAllDevices();
-                wasPaused = true;
-            }
-            requestAnimationFrame(tick);
-            return;
-        }
-        wasPaused = false;
-
-        const now = (videoEl.currentTime * 1000) - config.latency;
-
-        // Update Indices
-        state.mainIdx = updateIndex(currentScript.main, state.mainIdx, now);
-        state.vibeIdx = updateIndex(currentScript.vibrate, state.vibeIdx, now);
-        state.rotateIdx = updateIndex(currentScript.rotate, state.rotateIdx, now);
-
-        // 1. Process Main Action (Linear)
-        // Ensure we have a valid action
-        const mainTarget = currentScript.main.actions[state.mainIdx];
-        if (!mainTarget) {
-            requestAnimationFrame(tick);
-            return;
-        }
-
-        const mainDuration = mainTarget.at - now;
-
-        let shouldSendMain = false;
-        // Only trigger action if close enough (active segment)
-        if (mainDuration > 0 && mainDuration < 1000 && !mainTarget._sent) {
-            shouldSendMain = true;
-            mainTarget._sent = true;
-        }
-
-        // Calculate Fallback Speed
-        let fallbackIntensity = 0;
-        if (shouldSendMain) {
-            const lastPos = currentScript.main.actions[state.mainIdx - 1] ? currentScript.main.actions[state.mainIdx - 1].pos : mainTarget.pos;
-            const dist = Math.abs(mainTarget.pos - lastPos) / 100.0;
-            const durSec = mainDuration / 1000.0;
-            const speed = durSec > 0 ? (dist / durSec) : 0;
-            fallbackIntensity = Math.min(speed / 4.0, 1.0); // Clamp
-            if (dist < 0.01) fallbackIntensity = 0;
-        }
-
-        // Detect "Gap" (Next action is far away)
-        // If we represent a gap as > 2 seconds to next point
-        const isGap = mainDuration > 2000;
-
-        // Execute Commands
-        client.devices.forEach(d => {
-            // A. Linear (Main Script)
-            if (shouldSendMain && d.linear) {
-                d.linear(mainDuration, mainTarget.pos / 100.0).catch(e => { });
-            }
-
-            // B. Vibration
-            if (d.vibrate) {
-                if (currentScript.vibrate) {
-                    const idx = state.vibeIdx;
-                    const action = currentScript.vibrate.actions[idx];
-                    if (action) {
-                        const dur = action.at - now;
-                        if (dur > 0 && dur < 500 && !action._sent) {
-                            const intensity = (action.pos / 100.0) * ((config.vibeIntensity || 100) / 100.0);
-                            d.vibrate(intensity).catch(e => { });
-                            action._sent = true;
-                        }
-                    }
-                } else if (config.fallbackVibration) {
-                    if (shouldSendMain) {
-                        const intensity = fallbackIntensity * ((config.vibeIntensity || 100) / 100.0);
-                        d.vibrate(intensity).catch(e => { });
-                    } else if (isGap) {
-                        // Stop vibration during gaps
-                        d.vibrate(0).catch(() => { });
-                    }
-                }
-            }
-
-            // C. Rotation
-            if (d.rotate) {
-                if (currentScript.rotate) {
-                    const idx = state.rotateIdx;
-                    const action = currentScript.rotate.actions[idx];
-                    if (action) {
-                        const dur = action.at - now;
-                        if (dur > 0 && dur < 500 && !action._sent) {
-                            const speed = (action.pos / 100.0) * ((config.rotateIntensity || 100) / 100.0);
-                            d.rotate(speed, true).catch(e => { });
-                            action._sent = true;
-                        }
-                    }
-                } else if (config.fallbackRotation) {
-                    if (shouldSendMain) {
-                        const speed = fallbackIntensity * ((config.rotateIntensity || 100) / 100.0);
-                        d.rotate(speed, true).catch(e => { });
-                    } else if (isGap) {
-                        // Stop rotation during gaps
-                        d.rotate(0, true).catch(() => { });
-                    }
-                }
-            }
-        });
-
-        requestAnimationFrame(tick);
-    }
-
-    // 7. Video Hook
     function hookVideo() {
         const v = document.querySelector('video');
-        if (v && v !== videoEl) {
-            videoEl = v;
+        if (v && v !== currentVideo) {
+            console.log("stashButtplug: Hooking new video element");
+            currentVideo = v;
+
+            const sceneId = window.location.pathname.match(/\/scenes\/(\d+)/)?.[1];
+            if (sceneId) {
+                manager.uploadScript(`/scene/${sceneId}/funscript`);
+            }
+
+            v.onplaying = () => manager.play(v.currentTime);
+            v.onpause = () => manager.pause();
+            v.ontimeupdate = () => manager.sync(v.currentTime);
             v.onseeked = () => {
-                // Reset indices
-                state.mainIdx = 0;
-                state.vibeIdx = 0;
-                state.rotateIdx = 0;
-                if (currentScript) {
-                    // Reset sent flags
-                    if (currentScript.main) currentScript.main.actions.forEach(a => a._sent = false);
-                    if (currentScript.vibrate) currentScript.vibrate.actions.forEach(a => a._sent = false);
-                    if (currentScript.rotate) currentScript.rotate.actions.forEach(a => a._sent = false);
-                }
+                manager.pause();
+                manager.play(v.currentTime);
             };
-            loadFunscript();
         }
     }
 
-    // Initialize
+    // --- 5. UI Integration ---
+    async function setupUI() {
+        // Add Buttplug Settings to Settings Sidebar
+        patch.after("Settings", (props, result) => {
+            // This is a coarse patch, we'd ideally patch the sidebar but Stash sidebar is dynamic
+            return result;
+        });
+
+        // Register a distinct route for Buttplug Settings
+        const ButtplugSettingsPage = () => {
+            const [config, setConfig] = React.useState(manager._config);
+            const [status, setStatus] = React.useState(manager._client?.connected ? "Connected" : "Disconnected");
+
+            const handleSave = () => {
+                localStorage.setItem('stash-bp-config', JSON.stringify(config));
+                manager._config = config;
+                // Update connector if URL changed
+                if (manager._client) {
+                    const { ButtplugBrowserWebsocketClientConnector } = manager._ButtplugDocs;
+                    manager._connector = new ButtplugBrowserWebsocketClientConnector(config.serverUrl);
+                }
+            };
+
+            const toggleConn = async () => {
+                if (manager._client?.connected) {
+                    await manager.disconnect();
+                } else {
+                    await manager.connect();
+                }
+                setStatus(manager._client?.connected ? "Connected" : "Disconnected");
+            };
+
+            return React.createElement("div", { className: "container-fluid" },
+                React.createElement("div", { className: "row" },
+                    React.createElement("div", { className: "col-md-12" },
+                        React.createElement("h1", null, "Buttplug.io Settings"),
+                        React.createElement("hr", null),
+                        React.createElement(Form.Group, null,
+                            React.createElement(Form.Label, null, "Server URL"),
+                            React.createElement(Form.Control, {
+                                type: "text",
+                                value: config.serverUrl,
+                                onChange: e => setConfig({ ...config, serverUrl: e.target.value })
+                            })
+                        ),
+                        React.createElement(Form.Group, null,
+                            React.createElement(Form.Label, null, "Latency (ms)"),
+                            React.createElement(Form.Control, {
+                                type: "number",
+                                value: config.latency,
+                                onChange: e => setConfig({ ...config, latency: parseInt(e.target.value) || 0 })
+                            })
+                        ),
+                        React.createElement(Form.Check, {
+                            type: "checkbox",
+                            label: "Auto-Connect on Play",
+                            checked: config.autoConnect,
+                            onChange: e => setConfig({ ...config, autoConnect: e.target.checked })
+                        }),
+                        React.createElement("hr", null),
+                        React.createElement("div", { className: "d-flex align-items-center" },
+                            React.createElement(Button, { className: "mr-2", onClick: handleSave }, "Save Settings"),
+                            React.createElement(Button, { variant: manager._client?.connected ? "danger" : "success", onClick: toggleConn },
+                                manager._client?.connected ? "Disconnect" : "Connect"
+                            ),
+                            React.createElement("span", { className: "ml-3" }, `Status: ${status}`)
+                        )
+                    )
+                )
+            );
+        };
+
+        register.route("/settings/buttplug", ButtplugSettingsPage);
+
+        // Add Buttplug Settings to Settings Sidebar
+        patch.after("SettingTabs", (props, result) => {
+            const row = result.props.children[2];
+            if (!row || !row.props || !row.props.children) return result;
+
+            const menuCol = row.props.children[0];
+            const contentCol = row.props.children[1];
+
+            const nav = menuCol.props.children;
+            const content = contentCol.props.children;
+
+            // Add Nav Link
+            const navLink = React.createElement(Nav.Item, { key: "buttplug-nav" },
+                React.createElement(libraries.ReactRouterBootstrap.LinkContainer, { to: "/settings?tab=buttplug" },
+                    React.createElement(Nav.Link, { eventKey: "buttplug" }, "Buttplug.io")
+                )
+            );
+
+            // Insert before advanced switch (last child of Nav)
+            if (nav && nav.props && Array.isArray(nav.props.children)) {
+                nav.props.children.splice(nav.props.children.length - 2, 0, navLink);
+            }
+
+            // Add Tab Pane
+            const tabPane = React.createElement(Tab.Pane, { key: "buttplug-pane", eventKey: "buttplug" },
+                React.createElement(ButtplugSettingsPage, null)
+            );
+            if (content && content.props && Array.isArray(content.props.children)) {
+                content.props.children.push(tabPane);
+            }
+
+            return result;
+        });
+    }
+
     setupUI();
-
-    // Watch for navigation
-    let lastUrl = location.href;
-    new MutationObserver(() => {
-        if (location.href !== lastUrl) {
-            lastUrl = location.href;
-            setTimeout(loadFunscript, 1000);
-        }
-        hookVideo();
-    }).observe(document.body, { childList: true, subtree: true });
-
     setInterval(hookVideo, 2000);
-    requestAnimationFrame(tick);
+    new MutationObserver(hookVideo).observe(document.body, { childList: true, subtree: true });
 
+    console.log("stashButtplug: Plugin loaded successfully.");
 })();
