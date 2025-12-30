@@ -1,7 +1,7 @@
 (async function () {
     const { React, ReactDOM, libraries, register, patch } = window.PluginApi;
 
-    console.log("stashButtplug: Loading improved plugin (Isolation Mode)...");
+    console.log("stashButtplug: Loading improved plugin (Ghost Mode)...");
 
     // --- 1. Utility Functions ---
     function convertRange(value, fromLow, fromHigh, toLow, toHigh) {
@@ -175,7 +175,7 @@
                 }, 5000);
             } catch (e) {
                 console.error("stashButtplug: Connect failure", e);
-                throw e;
+                // We don't throw here to avoid crashing any external loop
             }
         }
 
@@ -270,31 +270,24 @@
         };
 
         const toggleConn = async () => {
-            try {
-                if (manager._client && manager._client.connected) {
-                    await manager.disconnect();
-                } else {
-                    await manager.connect();
-                }
-            } catch (err) {
-                alert("Connection failed.");
+            if (manager._client && manager._client.connected) {
+                await manager.disconnect();
+            } else {
+                await manager.connect();
             }
         };
 
-        const labelStyle = { fontWeight: "bold", fontSize: "1.1rem" };
-        const statusLabel = "Status: " + String(connStatus);
-
-        return React.createElement("div", { className: "buttplug-settings-panel setting-section pb-5" },
-            React.createElement("hr", null),
+        return React.createElement("div", { className: "buttplug-settings-panel shadow-sm p-4 bg-dark rounded border border-secondary mt-4 mb-5" },
             React.createElement("h1", { className: "mb-3" }, "Buttplug.io (Intiface)"),
+            React.createElement("hr", { className: "mb-4" }),
 
             // Server URL
-            React.createElement("div", { className: "setting row mb-3" },
-                React.createElement("div", { className: "col-12 col-md-6" },
-                    React.createElement("h3", { style: labelStyle }, "Server URL"),
-                    React.createElement("div", { className: "sub-heading text-muted" }, "The address of your Intiface Central server")
+            React.createElement("div", { className: "row mb-3" },
+                React.createElement("div", { className: "col-6" },
+                    React.createElement("h4", null, "Server URL"),
+                    React.createElement("div", { className: "text-muted small" }, "ws://localhost:12345")
                 ),
-                React.createElement("div", { className: "col-12 col-md-6" },
+                React.createElement("div", { className: "col-6" },
                     React.createElement("input", {
                         className: "form-control",
                         type: "text",
@@ -305,12 +298,9 @@
             ),
 
             // Latency
-            React.createElement("div", { className: "setting row mb-3" },
-                React.createElement("div", { className: "col-12 col-md-6" },
-                    React.createElement("h3", { style: labelStyle }, "Latency (ms)"),
-                    React.createElement("div", { className: "sub-heading text-muted" }, "Adjust timing synchronization")
-                ),
-                React.createElement("div", { className: "col-12 col-md-6" },
+            React.createElement("div", { className: "row mb-3" },
+                React.createElement("div", { className: "col-6" }, React.createElement("h4", null, "Latency (ms)")),
+                React.createElement("div", { className: "col-6" },
                     React.createElement("input", {
                         className: "form-control",
                         type: "number",
@@ -321,76 +311,68 @@
             ),
 
             // Auto Connect
-            React.createElement("div", { className: "setting row mb-3" },
-                React.createElement("div", { className: "col-12 col-md-6" },
-                    React.createElement("h3", { style: labelStyle }, "Auto-Connect"),
-                    React.createElement("div", { className: "sub-heading text-muted" }, "Connect on play")
-                ),
-                React.createElement("div", { className: "col-12 col-md-6 d-flex align-items-center" },
+            React.createElement("div", { className: "row mb-3" },
+                React.createElement("div", { className: "col-6" }, React.createElement("h4", null, "Auto-Connect")),
+                React.createElement("div", { className: "col-6 d-flex align-items-center" },
                     React.createElement("input", {
                         type: "checkbox",
                         className: "mr-2",
-                        id: "bp-auto-connect-check",
-                        style: { width: "20px", height: "20px" },
                         checked: Boolean(config.autoConnect),
                         onChange: e => setConfig({ ...config, autoConnect: !!e.target.checked })
                     }),
-                    React.createElement("label", { htmlFor: "bp-auto-connect-check", className: "m-0 ml-2" }, "Enable Auto-Connect")
+                    React.createElement("span", null, "Automatically connect when video plays")
                 )
             ),
 
             // Actions
-            React.createElement("div", { className: "d-flex align-items-center mt-4" },
+            React.createElement("div", { className: "d-flex align-items-center mt-4 pt-3" },
                 React.createElement("button", {
-                    className: "btn btn-primary mr-2",
+                    className: "btn btn-primary mr-2 px-4",
                     onClick: handleSave
                 }, "Save Settings"),
                 React.createElement("button", {
-                    className: (manager._client && manager._client.connected) ? "btn btn-danger mr-2" : "btn btn-success mr-2",
+                    className: (manager._client && manager._client.connected) ? "btn btn-danger mr-2 px-4" : "btn btn-success mr-2 px-4",
                     onClick: toggleConn
                 }, (manager._client && manager._client.connected) ? "Disconnect" : "Connect"),
-                React.createElement("span", { className: "ml-3 font-weight-bold" }, statusLabel)
+                React.createElement("span", { className: "ml-3 font-weight-bold" }, "Status: " + String(connStatus))
             )
         );
     };
 
-    // --- 6. UI Injection Bridge ---
-    // This is the "Nuclear Option" that renders the UI into a separate root
-    // completely avoiding any reconciliation issues with the main Stash React tree.
-    const UIBridge = () => {
-        const containerRef = React.useRef(null);
+    // --- 6. Ghost Injection Bridge ---
+    // This logic performs a side-effect injection into the DOM.
+    // It returns the original React result UNTOUCHED to prevent Error #31.
+    async function injectUI() {
+        // We look for the "Interface" panel's content
+        // The last .setting-section is usually the one where Handy options reside.
+        const settingsContent = document.querySelector(".settings-content");
+        if (!settingsContent) return;
 
-        React.useEffect(() => {
-            if (containerRef.current) {
-                console.log("stashButtplug: Rendering isolated settings UI...");
-                // We render into the div we just created in the React tree
-                // This keeps it visually and logically separated from the parent crash.
-                ReactDOM.render(React.createElement(ButtplugSettingsComponent, null), containerRef.current);
-                return () => {
-                    if (containerRef.current) {
-                        ReactDOM.unmountComponentAtNode(containerRef.current);
-                    }
-                };
-            }
-        }, []);
+        // Check if we are already injected to avoid duplicates
+        if (document.getElementById("bp-ghost-root")) return;
 
-        return React.createElement("div", { ref: containerRef, id: "bp-settings-isolated-root" });
-    };
+        console.log("stashButtplug: Found settings content. Injecting ghost UI...");
 
-    async function setupUI() {
-        console.log("stashButtplug: Registering Isolated UI Bridge...");
-        patch.after("SettingsInterfacePanel", (props, result) => {
-            // We return an array: [original_result, bridge_element]
-            // This is the most stable way to append to a result without
-            // wrapping it in a potentially problematic Fragment.
-            return [
-                result,
-                React.createElement(UIBridge, { key: "bp-ui-bridge" })
-            ];
-        });
+        const ghostRoot = document.createElement("div");
+        ghostRoot.id = "bp-ghost-root";
+
+        // Append to the end of the settings content
+        settingsContent.appendChild(ghostRoot);
+
+        // Render into the ghost root using the core's React/ReactDOM
+        ReactDOM.render(React.createElement(ButtplugSettingsComponent, null), ghostRoot);
     }
 
-    // --- 7. Lifecycle Hooks ---
+    // We use the patch only as a TRIGGER, we never modify the return value.
+    patch.after("SettingsInterfacePanel", (props, result) => {
+        // This is safe. side-effects inside a patch are allowed as long as
+        // we return the original 'result' exactly.
+        setTimeout(injectUI, 100);
+        return result;
+    });
+
+    // --- 7. Video lifecycle ---
+    let currentVideo = null;
     function hookVideo() {
         const v = document.querySelector('video');
         if (v && v !== currentVideo) {
@@ -404,10 +386,8 @@
         }
     }
 
-    let currentVideo = null;
-    setupUI();
     setInterval(hookVideo, 2000);
     new MutationObserver(hookVideo).observe(document.body, { childList: true, subtree: true });
 
-    console.log("stashButtplug: Plugin isolation mode active.");
+    console.log("stashButtplug: Ghost Mode Active. No more React Error #31.");
 })();
