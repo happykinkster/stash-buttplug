@@ -1,0 +1,10 @@
+name: stashVR
+description: WebXR VR support for Stash - Send videos to VR headsets
+version: 1.0
+url: https://github.com/user/stash-vr
+ui:
+  javascript:
+    - main.js
+  csp:
+    script-src:
+      - https://cdn.jsdelivr.net
