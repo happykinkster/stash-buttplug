@@ -1,7 +1,7 @@
 (async function () {
-    const { React, ReactDOM, libraries, register, patch, components } = window.PluginApi;
+    const { React, ReactDOM, libraries, register, patch } = window.PluginApi;
 
-    console.log("stashButtplug: Loading plugin (Interface Stability Mode)...");
+    console.log("stashButtplug: Loading improved plugin (Surgical Safety Mode)...");
 
     // --- 1. Utility Functions ---
     function convertRange(value, fromLow, fromHigh, toLow, toHigh) {
@@ -30,7 +30,7 @@
         set funscript(json) {
             this.pause();
             this._funscript = json;
-            if (this._funscript?.inverted) {
+            if (this._funscript?.inverted && Array.isArray(this._funscript.actions)) {
                 this._funscript.actions = this._funscript.actions.map(a => {
                     a.pos = convertRange(a.pos, 0, 100, 100, 0);
                     return a;
@@ -134,10 +134,10 @@
             this._funscriptPlayer = new FunscriptPlayer(async (pos) => {
                 await this.sendToDevice(pos);
             });
-            this._config = this.loadConfig();
+            this._config = this._loadConfig();
         }
 
-        loadConfig() {
+        _loadConfig() {
             const defaults = {
                 serverUrl: "ws://localhost:12345",
                 latency: 0,
@@ -146,7 +146,8 @@
                 rotateIntensity: 100
             };
             try {
-                const saved = JSON.parse(localStorage.getItem('stash-bp-config'));
+                const savedString = localStorage.getItem('stash-bp-config');
+                const saved = savedString ? JSON.parse(savedString) : {};
                 return { ...defaults, ...saved };
             } catch (e) { return defaults; }
         }
@@ -158,12 +159,7 @@
                 const { ButtplugClient, ButtplugBrowserWebsocketClientConnector } = this._ButtplugDocs;
                 this._client = new ButtplugClient("Stash Plugin");
                 this._connector = new ButtplugBrowserWebsocketClientConnector(this._config.serverUrl);
-
-                this._client.addListener("deviceadded", (device) => console.log(`[buttplug] Device Added: ${device.name}`));
-                this._client.addListener("deviceremoved", (device) => console.log(`[buttplug] Device Removed: ${device.name}`));
-            } catch (e) {
-                console.error("stashButtplug: Failed to load Buttplug library", e);
-            }
+            } catch (e) { console.error("stashButtplug: Library error", e); }
         }
 
         async connect() {
@@ -171,64 +167,68 @@
             if (this._client && this._client.connected) return;
             try {
                 await this._client.connect(this._connector);
-                await this._client.startScanning();
-                setTimeout(() => this._client && this._client.stopScanning().catch(() => { }), 5000);
+                await this._client.startScanning().catch(() => { });
+                setTimeout(() => {
+                    if (this._client && this._client.connected) {
+                        this._client.stopScanning().catch(() => { });
+                    }
+                }, 5000);
             } catch (e) {
-                console.error("stashButtplug: Connection failed", e);
+                console.error("stashButtplug: Connect failure", e);
                 throw e;
             }
         }
 
         async disconnect() {
-            if (this._client?.connected) {
-                await this._client.disconnect();
+            if (this._client && this._client.connected) {
+                await this._client.disconnect().catch(() => { });
             }
         }
 
         async checkConnection() {
-            if (!this._client?.connected && this._config.autoConnect) {
+            if (this._config.autoConnect && (!this._client || !this._client.connected)) {
                 await this.connect().catch(() => { });
             }
         }
 
         async sendToDevice(pos) {
-            if (!this._client?.connected) return;
+            if (!this._client || !this._client.connected) return;
+            const intensity = Number(this._config.vibeIntensity || 100) / 100;
+            const rotateScale = Number(this._config.rotateIntensity || 100) / 100;
+            const position = Number(pos) / 100;
+
             for (const device of this._client.devices) {
-                if (device.vibrateAttributes.length > 0) {
-                    const intensity = (pos / 100) * (this._config.vibeIntensity / 100);
-                    await device.vibrate(intensity).catch(() => { });
-                }
-                if (device.linearAttributes.length > 0) {
-                    const duration = Math.round(1000 / this._funscriptPlayer.hzRate);
-                    await device.linear(pos / 100, duration).catch(() => { });
-                }
-                if (device.rotateAttributes.length > 0) {
-                    const speed = (pos / 100) * (this._config.rotateIntensity / 100);
-                    await device.rotate(speed, true).catch(() => { });
-                }
+                try {
+                    if (device.vibrateAttributes && device.vibrateAttributes.length > 0) {
+                        await device.vibrate(position * intensity).catch(() => { });
+                    }
+                    if (device.linearAttributes && device.linearAttributes.length > 0) {
+                        await device.linear(position, 16).catch(() => { });
+                    }
+                    if (device.rotateAttributes && device.rotateAttributes.length > 0) {
+                        await device.rotate(position * rotateScale, true).catch(() => { });
+                    }
+                } catch (e) { }
             }
         }
 
         async uploadScript(funscriptPath) {
-            if (!funscriptPath) {
-                this._funscriptPlayer.funscript = undefined;
-                return;
-            }
+            if (!funscriptPath) return;
             try {
                 const json = await fetch(funscriptPath).then(r => r.json());
                 this._funscriptPlayer.funscript = json;
-            } catch (e) { console.error("stashButtplug: Failed to fetch funscript", e); }
+            } catch (e) { }
         }
 
         async play(at) {
             await this.checkConnection();
-            this._funscriptPlayer.offset = -this._config.latency;
-            this._funscriptPlayer.play(Math.trunc(at * 1000));
+            this._funscriptPlayer._offset = -Number(this._config.latency || 0);
+            this._funscriptPlayer.play(Math.trunc(Number(at) * 1000));
         }
 
         async pause() {
             this._funscriptPlayer.pause();
-            if (this._client?.connected) {
+            if (this._client && this._client.connected) {
                 for (const device of this._client.devices) {
                     await device.stop().catch(() => { });
                 }
@@ -236,76 +236,62 @@
         }
 
         sync(at) {
-            this._funscriptPlayer.playSync(Math.trunc(at * 1000));
+            this._funscriptPlayer.playSync(Math.trunc(Number(at) * 1000));
         }
     }
 
-    // --- 4. Interactive Manager ---
     const manager = new ButtplugInteractive();
-    let currentVideo = null;
 
-    function hookVideo() {
-        const v = document.querySelector('video');
-        if (v && v !== currentVideo) {
-            console.log("stashButtplug: Hooking new video element");
-            currentVideo = v;
-
-            const sceneId = window.location.pathname.match(/\/scenes\/(\d+)/)?.[1];
-            if (sceneId) {
-                manager.uploadScript(`/scene/${sceneId}/funscript`);
-            }
-
-            v.onplaying = () => manager.play(v.currentTime);
-            v.onpause = () => manager.pause();
-            v.ontimeupdate = () => manager.sync(v.currentTime);
-            v.onseeked = () => {
-                manager.pause();
-                manager.play(v.currentTime);
-            };
-        }
-    }
-
-    // --- 5. UI Components (Plain HTML for absolute safety) ---
+    // --- 5. UI Component (Defined outside for stability) ---
     const ButtplugSettingsComponent = () => {
-        const [config, setConfig] = React.useState(manager._config);
-        const [status, setStatus] = React.useState(manager._client?.connected ? "Connected" : "Disconnected");
+        const [config, setConfig] = React.useState(() => ({ ...manager._config }));
+        const [connStatus, setConnStatus] = React.useState("Disconnected");
+
+        React.useEffect(() => {
+            const i = setInterval(() => {
+                const isConnected = !!(manager._client && manager._client.connected);
+                setConnStatus(isConnected ? "Connected" : "Disconnected");
+            }, 1000);
+            return () => clearInterval(i);
+        }, []);
 
         const handleSave = () => {
-            localStorage.setItem('stash-bp-config', JSON.stringify(config));
-            manager._config = config;
-            if (manager._client && manager._ButtplugDocs) {
-                try {
+            try {
+                localStorage.setItem('stash-bp-config', JSON.stringify(config));
+                manager._config = config;
+                if (manager._client && manager._ButtplugDocs) {
                     const { ButtplugBrowserWebsocketClientConnector } = manager._ButtplugDocs;
                     manager._connector = new ButtplugBrowserWebsocketClientConnector(config.serverUrl);
-                } catch (e) { }
+                }
+                alert("Settings Saved successfully.");
+            } catch (err) {
+                alert("Error saving settings.");
             }
-            alert("Settings Saved");
         };
 
         const toggleConn = async () => {
             try {
-                if (manager._client?.connected) {
+                if (manager._client && manager._client.connected) {
                     await manager.disconnect();
                 } else {
                     await manager.connect();
                 }
-            } catch (e) { }
-            setStatus(manager._client?.connected ? "Connected" : "Disconnected");
+            } catch (err) {
+                alert("Connection failed.");
+            }
         };
 
-        // Static labels to avoid any translation object issues
-        const statusText = "Status: " + String(status);
-
-        return React.createElement("div", { className: "setting-group buttplug-settings mt-3" },
+        return React.createElement("div", { className: "buttplug-settings-panel" },
             React.createElement("hr", null),
-            React.createElement("h3", { className: "mb-3" }, "Buttplug.io (Intiface)"),
+            React.createElement("h1", { className: "mb-3" }, "Buttplug.io (Intiface)"),
 
-            React.createElement("div", { className: "setting" },
-                React.createElement("div", null,
+            // Server URL
+            React.createElement("div", { className: "setting row mb-3" },
+                React.createElement("div", { className: "col-12 col-md-6" },
                     React.createElement("h3", null, "Server URL"),
                     React.createElement("div", { className: "sub-heading text-muted" }, "The address of your Intiface Central server")
                 ),
-                React.createElement("div", null,
+                React.createElement("div", { className: "col-12 col-md-6" },
                     React.createElement("input", {
                         className: "form-control",
                         type: "text",
@@ -315,12 +301,13 @@
                 )
             ),
 
-            React.createElement("div", { className: "setting" },
-                React.createElement("div", null,
+            // Latency
+            React.createElement("div", { className: "setting row mb-3" },
+                React.createElement("div", { className: "col-12 col-md-6" },
                     React.createElement("h3", null, "Latency (ms)"),
                     React.createElement("div", { className: "sub-heading text-muted" }, "Adjust timing synchronization")
                 ),
-                React.createElement("div", null,
+                React.createElement("div", { className: "col-12 col-md-6" },
                     React.createElement("input", {
                         className: "form-control",
                         type: "number",
@@ -330,56 +317,53 @@
                 )
             ),
 
-            React.createElement("div", { className: "setting" },
-                React.createElement("div", null,
+            // Auto Connect
+            React.createElement("div", { className: "setting row mb-3" },
+                React.createElement("div", { className: "col-12 col-md-6" },
                     React.createElement("h3", null, "Auto-Connect"),
                     React.createElement("div", { className: "sub-heading text-muted" }, "Connect on play")
                 ),
-                React.createElement("div", { className: "value" },
+                React.createElement("div", { className: "col-12 col-md-6" },
                     React.createElement("input", {
                         type: "checkbox",
+                        className: "mr-2",
+                        id: "bp-auto-connect-check",
                         checked: Boolean(config.autoConnect),
                         onChange: e => setConfig({ ...config, autoConnect: e.target.checked })
                     }),
-                    React.createElement("span", { className: "ml-2" }, "Enable")
+                    React.createElement("label", { htmlFor: "bp-auto-connect-check", className: "m-0" }, "Enable")
                 )
             ),
 
-            React.createElement("div", { className: "row mt-3 pb-5" },
-                React.createElement("div", { className: "col-12 d-flex align-items-center" },
-                    React.createElement("button", {
-                        className: "btn btn-primary mr-2",
-                        onClick: handleSave
-                    }, "Save Settings"),
-                    React.createElement("button", {
-                        className: (manager._client?.connected ? "btn btn-danger mr-2" : "btn btn-success mr-2"),
-                        onClick: toggleConn
-                    }, (manager._client?.connected ? "Disconnect" : "Connect")),
-                    React.createElement("span", { className: "ml-3 font-weight-bold" }, statusText)
-                )
+            // Actions
+            React.createElement("div", { className: "d-flex align-items-center mt-4" },
+                React.createElement("button", {
+                    className: "btn btn-primary mr-2",
+                    onClick: handleSave
+                }, "Save Settings"),
+                React.createElement("button", {
+                    className: (manager._client && manager._client.connected) ? "btn btn-danger mr-2" : "btn btn-success mr-2",
+                    onClick: toggleConn
+                }, (manager._client && manager._client.connected) ? "Disconnect" : "Connect"),
+                React.createElement("span", { className: "ml-3 font-weight-bold" }, "Status: " + String(connStatus))
             )
         );
     };
 
-    // --- 6. UI Integration (Surgical & Safe) ---
+    // --- 6. UI Integration ---
     async function setupUI() {
+        console.log("stashButtplug: Registering surgical UI patch...");
         patch.after("SettingsInterfacePanel", (props, result) => {
-            if (!result || !result.props) return result;
-
-            const key = "bp-settings-patch";
-            // Use React.Children.toArray for safe handling of children
-            const children = React.Children.toArray(result.props.children);
-
-            if (!children.some(c => c && c.key === key)) {
-                // Append our component to the end of the children array
-                children.push(React.createElement(ButtplugSettingsComponent, { key: key }));
-
-                // Return a CLONE of the result with the new children list
-                // This is the "React Way" and avoids mutation errors (#31)
-                return React.cloneElement(result, { children: children });
-            }
-
-            return result;
+            // ULTRA-SAFE NESTING:
+            // We return a new Fragment that contains the original result 
+            // and OUR component at the bottom. This prevents us from
+            // breaking any internal array structures or indices of the core.
+            return React.createElement(React.Fragment, null,
+                result,
+                React.createElement("div", { className: "setting-section pb-5", key: "bp-outer-section" },
+                    React.createElement(ButtplugSettingsComponent, null)
+                )
+            );
         });
     }
 
@@ -387,5 +371,5 @@
     setInterval(hookVideo, 2000);
     new MutationObserver(hookVideo).observe(document.body, { childList: true, subtree: true });
 
-    console.log("stashButtplug: Stability Plugin fully initialized.");
+    console.log("stashButtplug: Plugin fully initialized.");
 })();
