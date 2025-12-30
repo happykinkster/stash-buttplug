@@ -143,8 +143,6 @@
                 serverUrl: "ws://localhost:12345",
                 latency: 0,
                 autoConnect: false,
-                fallbackVibration: true,
-                fallbackRotation: true,
                 vibeIntensity: 100,
                 rotateIntensity: 100
             };
