@@ -27,7 +27,8 @@
         });
         const result = await response.json();
         if (result.errors) {
-            console.error("stashVR: GraphQL Error", result.errors);
+            console.error("stashVR: GraphQL Error", result.errors.map(e => e.message).join(', '));
+            console.debug("stashVR: Full GraphQL Errors", result.errors);
             return null;
         }
         return result.data;
@@ -37,9 +38,7 @@
     async function fetchVRTag() {
         const data = await gql(`{
             configuration {
-                ui {
-                    vrTag
-                }
+                ui
             }
         }`);
         if (data && data.configuration && data.configuration.ui) {
