@@ -173,6 +173,14 @@
             await this.initButtplug();
             if (!this._client || this._client.connected) return;
 
+            const isHttps = window.location.protocol === "https:";
+            const isWs = this._config.serverUrl.startsWith("ws://");
+
+            if (isHttps && isWs) {
+                console.warn("stashButtplug: Mixed Content Detected! Browsers block ws:// connections from https:// pages.");
+                console.warn("Try using http:// to access Stash, or use a wss:// connection if your Intiface/Buttplug server supports it.");
+            }
+
             const { ButtplugBrowserWebsocketClientConnector } = this._ButtplugDocs;
             this._connector = new ButtplugBrowserWebsocketClientConnector(this._config.serverUrl);
 
@@ -183,7 +191,13 @@
                 setTimeout(() => {
                     if (this._client?.connected) this._client.stopScanning().catch(() => { });
                 }, 5000);
-            } catch (e) { console.error("stashButtplug: Connection failed", e); }
+            } catch (e) {
+                console.error("stashButtplug: Connection failed.", e);
+                if (e && e.message) console.error("Error message:", e.message);
+                if (isHttps && isWs) {
+                    console.error("This failure is almost certainly due to HTTPS blocking a ws:// connection (Mixed Content).");
+                }
+            }
         }
 
         async disconnect() {
