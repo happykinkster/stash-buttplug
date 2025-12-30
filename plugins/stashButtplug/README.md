@@ -59,6 +59,14 @@ Located at the bottom of **Settings -> Interface**:
 - **No Buttplug Settings**: Refresh the page with (Ctrl+F5). Go to **Settings -> Interface** and scroll to the bottom. Check the browser console (F12) for "stashButtplug: Loading plugin...".
 - **Not Syncing**: Ensure the scene has a funscript assigned in Stash. This plugin fetches the script from `/scene/<ID>/funscript`.
 - **Connection Error**: Ensure Intiface is listening on `ws://localhost:12345` and that "Enable WebSockets" is checked in Intiface settings.
+- **Connection Error (HTTPS/Mixed Content)**: If you use Stash via HTTPS (e.g., `https://stash.example.com`), browsers block connections to local `ws://` addresses. 
+    - **Solution 1 (Recommended)**: Access Stash via `http://` instead of `https://`.
+    - **Solution 2 (Chrome/Edge)**: 
+        1. Click the **Lock icon** (or "Not secure") on the left of the address bar.
+        2. Select **Site settings**.
+        3. Find **Insecure content** and set it to **Allow**.
+        4. Refresh the page.
+    - **Solution 3 (Advanced)**: Change the Server URL to `ws://127.0.0.1:12345`.
 
 ## Requirements
 
