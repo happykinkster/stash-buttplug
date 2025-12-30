@@ -34,25 +34,29 @@ This plugin connects StashApp to Buttplug.io (Intiface) to control devices like 
 ## Usage
 
 1. **Start Intiface Central**: Ensure Intiface Central is running (Port 12345, WebSockets enabled).
+## Usage
+
+1. **Start Intiface Central**: Ensure Intiface Central is running (Port 12345, WebSockets enabled).
 2. **Configure Connection**:
-   - Go to **Settings > Buttplug.io**.
-   - Ensure the **Server URL** is correct (Default: `ws://localhost:12345`).
-   - Click **Connect**. It should show "Status: Connected".
+    - Go to **Settings -> Interface**.
+    - Scroll to the bottom to find the **Buttplug.io (Intiface)** section.
+    - Ensure the **Server URL** is correct (Default: `ws://localhost:12345`).
+    - Click **Connect**. It should show "Status: Connected".
 3. **Play**:
-   - Open a scene with a funscript.
-   - Play the video. Your devices will sync automatically!
+    - Open a scene with a funscript.
+    - Play the video. Your devices will sync automatically!
 
 ## Advanced Settings
 
-Located in **Settings > Buttplug.io**:
+Located at the bottom of **Settings -> Interface**:
 
 - **Server URL**: The address of your Intiface Central server.
 - **Latency**: Adjust timing synchronization (ms) to compensate for network or device delay.
-- **Auto-Connect on Play**: When enabled, playing a video will automatically attempt to connect to Buttplug if not already connected.
+- **Auto-Connect**: When enabled, playing a video will automatically attempt to connect to Buttplug if not already connected.
 
 ## Troubleshooting
 
-- **No "Buttplug.io" Tab**: Refresh the page. Check the browser console (F12) for "stashButtplug: Loading improved plugin...".
+- **No Buttplug Settings**: Refresh the page with (Ctrl+F5). Go to **Settings -> Interface** and scroll to the bottom. Check the browser console (F12) for "stashButtplug: Loading plugin...".
 - **Not Syncing**: Ensure the scene has a funscript assigned in Stash. This plugin fetches the script from `/scene/<ID>/funscript`.
 - **Connection Error**: Ensure Intiface is listening on `ws://localhost:12345` and that "Enable WebSockets" is checked in Intiface settings.
 

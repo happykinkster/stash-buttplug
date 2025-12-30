@@ -1,8 +1,7 @@
 (async function () {
     const { React, ReactDOM, libraries, register, patch, components } = window.PluginApi;
-    const { Button, Form, Modal, Nav, Tab } = libraries.Bootstrap;
 
-    console.log("stashButtplug: Loading improved plugin...");
+    console.log("stashButtplug: Loading plugin (Interface Integration)...");
 
     // --- 1. Utility Functions ---
     function convertRange(value, fromLow, fromHigh, toLow, toHigh) {
@@ -266,109 +265,110 @@
         }
     }
 
-    // --- 5. UI Integration ---
-    async function setupUI() {
-        // Add Buttplug Settings to Settings Sidebar
-        patch.after("Settings", (props, result) => {
-            // This is a coarse patch, we'd ideally patch the sidebar but Stash sidebar is dynamic
-            return result;
-        });
+    // --- 5. UI Components ---
+    const ButtplugSettingsComponent = () => {
+        const [config, setConfig] = React.useState(manager._config);
+        const [status, setStatus] = React.useState(manager._client?.connected ? "Connected" : "Disconnected");
 
-        // Register a distinct route for Buttplug Settings
-        const ButtplugSettingsPage = () => {
-            const [config, setConfig] = React.useState(manager._config);
-            const [status, setStatus] = React.useState(manager._client?.connected ? "Connected" : "Disconnected");
-
-            const handleSave = () => {
-                localStorage.setItem('stash-bp-config', JSON.stringify(config));
-                manager._config = config;
-                // Update connector if URL changed
-                if (manager._client) {
+        const handleSave = () => {
+            localStorage.setItem('stash-bp-config', JSON.stringify(config));
+            manager._config = config;
+            if (manager._client && manager._ButtplugDocs) {
+                try {
                     const { ButtplugBrowserWebsocketClientConnector } = manager._ButtplugDocs;
                     manager._connector = new ButtplugBrowserWebsocketClientConnector(config.serverUrl);
-                }
-            };
+                } catch (e) { }
+            }
+        };
 
-            const toggleConn = async () => {
+        const toggleConn = async () => {
+            try {
                 if (manager._client?.connected) {
                     await manager.disconnect();
                 } else {
                     await manager.connect();
                 }
-                setStatus(manager._client?.connected ? "Connected" : "Disconnected");
-            };
-
-            return React.createElement("div", { className: "container-fluid" },
-                React.createElement("div", { className: "row" },
-                    React.createElement("div", { className: "col-md-12" },
-                        React.createElement("h1", null, "Buttplug.io Settings"),
-                        React.createElement("hr", null),
-                        React.createElement(Form.Group, null,
-                            React.createElement(Form.Label, null, "Server URL"),
-                            React.createElement(Form.Control, {
-                                type: "text",
-                                value: config.serverUrl,
-                                onChange: e => setConfig({ ...config, serverUrl: e.target.value })
-                            })
-                        ),
-                        React.createElement(Form.Group, null,
-                            React.createElement(Form.Label, null, "Latency (ms)"),
-                            React.createElement(Form.Control, {
-                                type: "number",
-                                value: config.latency,
-                                onChange: e => setConfig({ ...config, latency: parseInt(e.target.value) || 0 })
-                            })
-                        ),
-                        React.createElement(Form.Check, {
-                            type: "checkbox",
-                            label: "Auto-Connect on Play",
-                            checked: config.autoConnect,
-                            onChange: e => setConfig({ ...config, autoConnect: e.target.checked })
-                        }),
-                        React.createElement("hr", null),
-                        React.createElement("div", { className: "d-flex align-items-center" },
-                            React.createElement(Button, { className: "mr-2", onClick: handleSave }, "Save Settings"),
-                            React.createElement(Button, { variant: manager._client?.connected ? "danger" : "success", onClick: toggleConn },
-                                manager._client?.connected ? "Disconnect" : "Connect"
-                            ),
-                            React.createElement("span", { className: "ml-3" }, `Status: ${status}`)
-                        )
-                    )
-                )
-            );
+            } catch (e) { }
+            setStatus(manager._client?.connected ? "Connected" : "Disconnected");
         };
 
-        register.route("/settings/buttplug", ButtplugSettingsPage);
+        const { Form, Button } = window.PluginApi.libraries.Bootstrap;
 
-        // Add Buttplug Settings to Settings Sidebar
-        patch.after("SettingTabs", (props, result) => {
-            const row = result.props.children[2];
-            if (!row || !row.props || !row.props.children) return result;
+        return React.createElement("div", { className: "setting-group buttplug-settings mt-3" },
+            React.createElement("hr", null),
+            React.createElement("h3", { className: "mb-3" }, "Buttplug.io (Intiface)"),
 
-            const menuCol = row.props.children[0];
-            const contentCol = row.props.children[1];
-
-            const nav = menuCol.props.children;
-            const content = contentCol.props.children;
-
-            // Add Nav Link
-            const navLink = React.createElement(Nav.Item, { key: "buttplug-nav" },
-                React.createElement(libraries.ReactRouterBootstrap.LinkContainer, { to: "/settings?tab=buttplug" },
-                    React.createElement(Nav.Link, { eventKey: "buttplug" }, "Buttplug.io")
+            React.createElement("div", { className: "setting" },
+                React.createElement("div", null,
+                    React.createElement("h3", null, "Server URL"),
+                    React.createElement("div", { className: "sub-heading" }, "The address of your Intiface Central server")
+                ),
+                React.createElement("div", null,
+                    React.createElement(Form.Control, {
+                        type: "text",
+                        value: String(config.serverUrl || ""),
+                        onChange: e => setConfig({ ...config, serverUrl: e.target.value })
+                    })
                 )
-            );
+            ),
 
-            // Insert before advanced switch (last child of Nav)
-            if (nav && nav.props && Array.isArray(nav.props.children)) {
-                nav.props.children.splice(nav.props.children.length - 2, 0, navLink);
+            React.createElement("div", { className: "setting" },
+                React.createElement("div", null,
+                    React.createElement("h3", null, "Latency (ms)"),
+                    React.createElement("div", { className: "sub-heading" }, "Adjust timing synchronization")
+                ),
+                React.createElement("div", null,
+                    React.createElement(Form.Control, {
+                        type: "number",
+                        value: Number(config.latency || 0),
+                        onChange: e => setConfig({ ...config, latency: parseInt(e.target.value) || 0 })
+                    })
+                )
+            ),
+
+            React.createElement("div", { className: "setting" },
+                React.createElement("div", null,
+                    React.createElement("h3", null, "Auto-Connect"),
+                    React.createElement("div", { className: "sub-heading" }, "Connect on play")
+                ),
+                React.createElement("div", null,
+                    React.createElement(Form.Check, {
+                        type: "switch",
+                        id: "bp-auto-connect-switch",
+                        checked: Boolean(config.autoConnect),
+                        onChange: e => setConfig({ ...config, autoConnect: e.target.checked })
+                    })
+                )
+            ),
+
+            React.createElement("div", { className: "row mt-3" },
+                React.createElement("div", { className: "col-12 d-flex align-items-center pb-5" },
+                    React.createElement(Button, { className: "mr-2", onClick: handleSave }, "Save Settings"),
+                    React.createElement(Button, {
+                        variant: manager._client?.connected ? "danger" : "success",
+                        onClick: toggleConn
+                    }, manager._client?.connected ? "Disconnect" : "Connect"),
+                    React.createElement("span", { className: "ml-3" }, "Status: " + String(status))
+                )
+            )
+        );
+    };
+
+    // --- 6. UI Integration ---
+    async function setupUI() {
+        patch.after("SettingsInterfacePanel", (props, result) => {
+            if (!result || !result.props) return result;
+
+            const key = "bp-settings-patch";
+            let children = result.props.children;
+
+            if (!Array.isArray(children)) {
+                result.props.children = [children];
+                children = result.props.children;
             }
 
-            // Add Tab Pane
-            const tabPane = React.createElement(Tab.Pane, { key: "buttplug-pane", eventKey: "buttplug" },
-                React.createElement(ButtplugSettingsPage, null)
-            );
-            if (content && content.props && Array.isArray(content.props.children)) {
-                content.props.children.push(tabPane);
+            if (!children.some(c => c && c.key === key)) {
+                children.push(React.createElement(ButtplugSettingsComponent, { key: key }));
             }
 
             return result;
@@ -379,5 +379,5 @@
     setInterval(hookVideo, 2000);
     new MutationObserver(hookVideo).observe(document.body, { childList: true, subtree: true });
 
-    console.log("stashButtplug: Plugin loaded successfully.");
+    console.log("stashButtplug: Plugin fully initialized with Interface integration.");
 })();
