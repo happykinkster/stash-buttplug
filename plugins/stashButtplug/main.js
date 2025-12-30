@@ -1,7 +1,7 @@
 (async function () {
     const { React, ReactDOM, libraries, register, patch } = window.PluginApi;
 
-    console.log("stashButtplug: Loading improved plugin (Surgical Safety Mode)...");
+    console.log("stashButtplug: Loading improved plugin (Isolation Mode)...");
 
     // --- 1. Utility Functions ---
     function convertRange(value, fromLow, fromHigh, toLow, toHigh) {
@@ -242,7 +242,7 @@
 
     const manager = new ButtplugInteractive();
 
-    // --- 5. UI Component (Defined outside for stability) ---
+    // --- 5. UI Component (Isolated) ---
     const ButtplugSettingsComponent = () => {
         const [config, setConfig] = React.useState(() => ({ ...manager._config }));
         const [connStatus, setConnStatus] = React.useState("Disconnected");
@@ -281,14 +281,17 @@
             }
         };
 
-        return React.createElement("div", { className: "buttplug-settings-panel" },
+        const labelStyle = { fontWeight: "bold", fontSize: "1.1rem" };
+        const statusLabel = "Status: " + String(connStatus);
+
+        return React.createElement("div", { className: "buttplug-settings-panel setting-section pb-5" },
             React.createElement("hr", null),
             React.createElement("h1", { className: "mb-3" }, "Buttplug.io (Intiface)"),
 
             // Server URL
             React.createElement("div", { className: "setting row mb-3" },
                 React.createElement("div", { className: "col-12 col-md-6" },
-                    React.createElement("h3", null, "Server URL"),
+                    React.createElement("h3", { style: labelStyle }, "Server URL"),
                     React.createElement("div", { className: "sub-heading text-muted" }, "The address of your Intiface Central server")
                 ),
                 React.createElement("div", { className: "col-12 col-md-6" },
@@ -296,7 +299,7 @@
                         className: "form-control",
                         type: "text",
                         value: String(config.serverUrl || ""),
-                        onChange: e => setConfig({ ...config, serverUrl: e.target.value })
+                        onChange: e => setConfig({ ...config, serverUrl: String(e.target.value) })
                     })
                 )
             ),
@@ -304,7 +307,7 @@
             // Latency
             React.createElement("div", { className: "setting row mb-3" },
                 React.createElement("div", { className: "col-12 col-md-6" },
-                    React.createElement("h3", null, "Latency (ms)"),
+                    React.createElement("h3", { style: labelStyle }, "Latency (ms)"),
                     React.createElement("div", { className: "sub-heading text-muted" }, "Adjust timing synchronization")
                 ),
                 React.createElement("div", { className: "col-12 col-md-6" },
@@ -320,18 +323,19 @@
             // Auto Connect
             React.createElement("div", { className: "setting row mb-3" },
                 React.createElement("div", { className: "col-12 col-md-6" },
-                    React.createElement("h3", null, "Auto-Connect"),
+                    React.createElement("h3", { style: labelStyle }, "Auto-Connect"),
                     React.createElement("div", { className: "sub-heading text-muted" }, "Connect on play")
                 ),
-                React.createElement("div", { className: "col-12 col-md-6" },
+                React.createElement("div", { className: "col-12 col-md-6 d-flex align-items-center" },
                     React.createElement("input", {
                         type: "checkbox",
                         className: "mr-2",
                         id: "bp-auto-connect-check",
+                        style: { width: "20px", height: "20px" },
                         checked: Boolean(config.autoConnect),
-                        onChange: e => setConfig({ ...config, autoConnect: e.target.checked })
+                        onChange: e => setConfig({ ...config, autoConnect: !!e.target.checked })
                     }),
-                    React.createElement("label", { htmlFor: "bp-auto-connect-check", className: "m-0" }, "Enable")
+                    React.createElement("label", { htmlFor: "bp-auto-connect-check", className: "m-0 ml-2" }, "Enable Auto-Connect")
                 )
             ),
 
@@ -345,31 +349,65 @@
                     className: (manager._client && manager._client.connected) ? "btn btn-danger mr-2" : "btn btn-success mr-2",
                     onClick: toggleConn
                 }, (manager._client && manager._client.connected) ? "Disconnect" : "Connect"),
-                React.createElement("span", { className: "ml-3 font-weight-bold" }, "Status: " + String(connStatus))
+                React.createElement("span", { className: "ml-3 font-weight-bold" }, statusLabel)
             )
         );
     };
 
-    // --- 6. UI Integration ---
+    // --- 6. UI Injection Bridge ---
+    // This is the "Nuclear Option" that renders the UI into a separate root
+    // completely avoiding any reconciliation issues with the main Stash React tree.
+    const UIBridge = () => {
+        const containerRef = React.useRef(null);
+
+        React.useEffect(() => {
+            if (containerRef.current) {
+                console.log("stashButtplug: Rendering isolated settings UI...");
+                // We render into the div we just created in the React tree
+                // This keeps it visually and logically separated from the parent crash.
+                ReactDOM.render(React.createElement(ButtplugSettingsComponent, null), containerRef.current);
+                return () => {
+                    if (containerRef.current) {
+                        ReactDOM.unmountComponentAtNode(containerRef.current);
+                    }
+                };
+            }
+        }, []);
+
+        return React.createElement("div", { ref: containerRef, id: "bp-settings-isolated-root" });
+    };
+
     async function setupUI() {
-        console.log("stashButtplug: Registering surgical UI patch...");
+        console.log("stashButtplug: Registering Isolated UI Bridge...");
         patch.after("SettingsInterfacePanel", (props, result) => {
-            // ULTRA-SAFE NESTING:
-            // We return a new Fragment that contains the original result 
-            // and OUR component at the bottom. This prevents us from
-            // breaking any internal array structures or indices of the core.
-            return React.createElement(React.Fragment, null,
+            // We return an array: [original_result, bridge_element]
+            // This is the most stable way to append to a result without
+            // wrapping it in a potentially problematic Fragment.
+            return [
                 result,
-                React.createElement("div", { className: "setting-section pb-5", key: "bp-outer-section" },
-                    React.createElement(ButtplugSettingsComponent, null)
-                )
-            );
+                React.createElement(UIBridge, { key: "bp-ui-bridge" })
+            ];
         });
     }
 
+    // --- 7. Lifecycle Hooks ---
+    function hookVideo() {
+        const v = document.querySelector('video');
+        if (v && v !== currentVideo) {
+            currentVideo = v;
+            const id = window.location.pathname.match(/\/scenes\/(\d+)/)?.[1];
+            if (id) manager.uploadScript(`/scene/${id}/funscript`);
+            v.onplaying = () => manager.play(v.currentTime);
+            v.onpause = () => manager.pause();
+            v.ontimeupdate = () => manager.sync(v.currentTime);
+            v.onseeked = () => { manager.pause(); manager.play(v.currentTime); };
+        }
+    }
+
+    let currentVideo = null;
     setupUI();
     setInterval(hookVideo, 2000);
     new MutationObserver(hookVideo).observe(document.body, { childList: true, subtree: true });
 
-    console.log("stashButtplug: Plugin fully initialized.");
+    console.log("stashButtplug: Plugin isolation mode active.");
 })();
