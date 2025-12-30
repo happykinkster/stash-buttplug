@@ -133,9 +133,7 @@
             this._config = {
                 serverUrl: "ws://localhost:12345",
                 latency: 0,
-                autoConnect: false,
-                vibeIntensity: 100,
-                rotateIntensity: 100
+                autoConnect: false
             };
         }
 
@@ -196,20 +194,18 @@
 
         async sendToDevice(pos) {
             if (!this._client || !this._client.connected) return;
-            const vibeScale = Number(this._config.vibeIntensity || 100) / 100;
-            const rotateScale = Number(this._config.rotateIntensity || 100) / 100;
             const position = Number(pos) / 100;
 
             for (const device of this._client.devices) {
                 try {
                     if (device.vibrateAttributes?.length > 0) {
-                        await device.vibrate(position * vibeScale).catch(() => { });
+                        await device.vibrate(position).catch(() => { });
                     }
                     if (device.linearAttributes?.length > 0) {
                         await device.linear(position, 16).catch(() => { });
                     }
                     if (device.rotateAttributes?.length > 0) {
-                        await device.rotate(position * rotateScale, true).catch(() => { });
+                        await device.rotate(position, true).catch(() => { });
                     }
                 } catch (e) { }
             }

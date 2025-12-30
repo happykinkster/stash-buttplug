@@ -26,11 +26,3 @@ settings:
     type: BOOLEAN
     displayName: Auto-Connect
     description: Automatically connect to Intiface when a video starts playing
-  vibeIntensity:
-    type: NUMBER
-    displayName: Vibration Intensity (%)
-    description: Global scale for vibration (0-100)
-  rotateIntensity:
-    type: NUMBER
-    displayName: Rotation Intensity (%)
-    description: Global scale for rotation (0-100)
