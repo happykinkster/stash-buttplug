@@ -16,6 +16,37 @@
     let xrRefSpace = null;
     let scene, camera, renderer, videoTexture, sphere;
     let videoEl = null;
+    let vrTagName = null;
+
+    // GraphQL helper
+    async function gql(query, variables = {}) {
+        const response = await fetch('/graphql', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query, variables })
+        });
+        const result = await response.json();
+        if (result.errors) {
+            console.error("stashVR: GraphQL Error", result.errors);
+            return null;
+        }
+        return result.data;
+    }
+
+    // Fetch VR tag from settings
+    async function fetchVRTag() {
+        const data = await gql(`{
+            configuration {
+                ui {
+                    vrTag
+                }
+            }
+        }`);
+        if (data && data.configuration && data.configuration.ui) {
+            vrTagName = data.configuration.ui.vrTag;
+            console.log("stashVR: Settings VR Tag Name:", vrTagName);
+        }
+    }
 
     // Setup Three.js scene
     function setupThreeJS() {
@@ -151,6 +182,15 @@
         console.log("stashVR: VR button added");
     }
 
+    // Remove VR button if it exists
+    function removeVRButton() {
+        const btn = document.getElementById('vr-button');
+        if (btn) {
+            btn.remove();
+            console.log("stashVR: VR button removed");
+        }
+    }
+
     function updateButtonText() {
         const btn = document.getElementById('vr-button');
         if (btn) {
@@ -159,13 +199,51 @@
         }
     }
 
+    // Check if current scene has the VR tag
+    async function checkSceneTags() {
+        if (!vrTagName) return false;
+
+        const match = window.location.pathname.match(/\/scenes\/(\d+)/);
+        if (!match) return false;
+
+        const sceneId = match[1];
+        const data = await gql(`query FindScene($id: ID!) {
+            findScene(id: $id) {
+                tags {
+                    name
+                }
+            }
+        }`, { id: sceneId });
+
+        if (data && data.findScene && data.findScene.tags) {
+            const tags = data.findScene.tags.map(t => t.name.toLowerCase());
+            return tags.includes(vrTagName.toLowerCase());
+        }
+        return false;
+    }
+
     // Hook video element
-    function hookVideo() {
+    async function hookVideo() {
         const v = document.querySelector('video');
         if (v && v !== videoEl) {
             videoEl = v;
             console.log("stashVR: Video element found and hooked");
-            addVRButton();
+
+            // Check if we should show the button
+            const shouldShow = await checkSceneTags();
+            if (shouldShow) {
+                addVRButton();
+            } else {
+                removeVRButton();
+            }
+        } else if (v && v === videoEl) {
+            // Check again in case tags changed or navigated (though hookVideo is called periodically)
+            // But we only want to do GraphQL if the URL id changed or periodically
+            // For now, let's keep it simple: if videoEl exists, we might need to remove it if we navigated
+            const match = window.location.pathname.match(/\/scenes\/(\d+)/);
+            if (!match) {
+                removeVRButton();
+            }
         }
     }
 
@@ -174,9 +252,10 @@
 
     // Check WebXR support
     if (navigator.xr) {
-        navigator.xr.isSessionSupported("immersive-vr").then(supported => {
+        navigator.xr.isSessionSupported("immersive-vr").then(async supported => {
             if (supported) {
                 console.log("stashVR: WebXR immersive-vr supported!");
+                await fetchVRTag();
                 hookVideo(); // Try immediately
             } else {
                 console.warn("stashVR: WebXR not supported on this device");
