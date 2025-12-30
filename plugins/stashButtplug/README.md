@@ -5,7 +5,7 @@ This plugin connects StashApp to Buttplug.io (Intiface) to control devices like 
 ## Features
 
 - **High Precision**: Uses the `FunscriptPlayer` logic from Stash core for smooth interpolation and sub-millisecond sync.
-- **Native Integration**: Seamlessly integrates into the **Settings -> Interface** page under the **Interactive Options** section.
+- **Native Settings**: Integrates a dedicated "Buttplug.io" tab into the Stash settings sidebar (`Settings -> Buttplug.io`).
 - **Deep Integration**: Hooks directly into video lifecycle events (play, pause, seek, timeupdate) for instant responsiveness.
 - **Multi-Device Support**: Controls Linear (Strokers), Vibration, and Rotation devices simultaneously.
 - **Smart Fallbacks**: Generates vibration and rotation commands from linear strokes if specific scripts are missing.
@@ -35,8 +35,7 @@ This plugin connects StashApp to Buttplug.io (Intiface) to control devices like 
 
 1. **Start Intiface Central**: Ensure Intiface Central is running (Port 12345, WebSockets enabled).
 2. **Configure Connection**:
-   - Go to **Settings > Interface**.
-   - Scroll down to the **Interactive Options** section.
+   - Go to **Settings > Buttplug.io**.
    - Ensure the **Server URL** is correct (Default: `ws://localhost:12345`).
    - Click **Connect**. It should show "Status: Connected".
 3. **Play**:
@@ -45,15 +44,15 @@ This plugin connects StashApp to Buttplug.io (Intiface) to control devices like 
 
 ## Advanced Settings
 
-Located in **Settings > Interface > Interactive Options**:
+Located in **Settings > Buttplug.io**:
 
 - **Server URL**: The address of your Intiface Central server.
 - **Latency**: Adjust timing synchronization (ms) to compensate for network or device delay.
-- **Auto-Connect**: When enabled, playing a video will automatically attempt to connect to Buttplug if not already connected.
+- **Auto-Connect on Play**: When enabled, playing a video will automatically attempt to connect to Buttplug if not already connected.
 
 ## Troubleshooting
 
-- **No Buttplug Settings**: Refresh the page. Go to **Settings -> Interface** and scroll to the bottom. Check the browser console (F12) for "stashButtplug: Loading improved plugin...".
+- **No "Buttplug.io" Tab**: Refresh the page. Check the browser console (F12) for "stashButtplug: Loading improved plugin...".
 - **Not Syncing**: Ensure the scene has a funscript assigned in Stash. This plugin fetches the script from `/scene/<ID>/funscript`.
 - **Connection Error**: Ensure Intiface is listening on `ws://localhost:12345` and that "Enable WebSockets" is checked in Intiface settings.
 
