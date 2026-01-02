@@ -34,9 +34,6 @@ This plugin connects StashApp to Buttplug.io (Intiface) to control devices like 
 ## Usage
 
 1. **Start Intiface Central**: Ensure Intiface Central is running (Port 12345, WebSockets enabled).
-## Usage
-
-1. **Start Intiface Central**: Ensure Intiface Central is running (Port 12345, WebSockets enabled).
 2. **Configure Connection**:
     - Go to **Settings -> Interface**.
     - Scroll to the bottom to find the **Buttplug.io (Intiface)** section.
