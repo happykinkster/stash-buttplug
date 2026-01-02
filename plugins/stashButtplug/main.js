@@ -133,7 +133,8 @@
             this._config = {
                 serverUrl: "ws://localhost:12345",
                 latency: 0,
-                autoConnect: false
+                autoConnect: false,
+                updateRate: 20
             };
         }
 
@@ -154,6 +155,9 @@
                     if (this._config.serverUrl !== oldUrl) {
                         await this.disconnect();
                         this._connector = null;
+                    }
+                    if (this._config.updateRate) {
+                        this._funscriptPlayer._hzRate = Number(this._config.updateRate);
                     }
                 }
             } catch (e) { console.error("stashButtplug: Failed to fetch settings", e); }
@@ -216,7 +220,8 @@
                         await device.vibrate(position).catch(() => { });
                     }
                     if (device.linearAttributes?.length > 0) {
-                        await device.linear(position, 16).catch(() => { });
+                        const duration = Math.round(1000 / (this._config.updateRate || 20));
+                        await device.linear(position, duration).catch(() => { });
                     }
                     if (device.rotateAttributes?.length > 0) {
                         await device.rotate(position, true).catch(() => { });

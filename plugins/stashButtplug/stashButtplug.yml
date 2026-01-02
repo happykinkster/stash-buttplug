@@ -26,3 +26,7 @@ settings:
     type: BOOLEAN
     displayName: Auto-Connect
     description: Automatically connect to Intiface when a video starts playing
+  updateRate:
+    type: NUMBER
+    displayName: Update Rate (Hz)
+    description: Frequency of commands sent to devices (default 20Hz, typical for Bluetooth)

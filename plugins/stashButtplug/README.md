@@ -41,6 +41,7 @@ Located at the bottom of **Settings -> Interface**:
 - **Server URL**: The address of your Intiface Central server.
 - **Latency**: Adjust timing synchronization (ms) to compensate for network or device delay.
 - **Auto-Connect**: When enabled, playing a video will automatically attempt to connect to Buttplug if not already connected.
+- **Update Rate (Hz)**: Frequency of commands sent to devices. Default is **20Hz** (recommended for Bluetooth). Increase to **60Hz** for wired devices if you want maximum precision.
 
 ## Troubleshooting
 
@@ -55,6 +56,7 @@ Located at the bottom of **Settings -> Interface**:
         3. Find **Insecure content** and set it to **Allow**.
         4. Refresh the page.
     - **Solution 3 (Advanced)**: Change the Server URL to `ws://127.0.0.1:12345`.
+- **Jerky Movement / Lag**: Bluetooth devices often cannot handle high-speed updates. Ensure **Update Rate** is set to **20Hz** (or lower). If using a wired device, you can try increasing this to 60Hz.
 
 ## Requirements
 
