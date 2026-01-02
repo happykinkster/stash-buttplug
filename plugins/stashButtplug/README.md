@@ -1,15 +1,6 @@
 # Stash-Buttplug Plugin
 
-This plugin connects StashApp to Buttplug.io (Intiface) to control devices like the Kiiroo Keon, vibrators, and rotators using Funscripts synced with your scenes. This version is built using high-precision logic ported from the Stash core.
-
-## Features
-
-- **High Precision**: Uses the `FunscriptPlayer` logic from Stash core for smooth interpolation and sub-millisecond sync.
-- **Native Settings**: Integrates a dedicated "Buttplug.io" tab into the Stash settings sidebar (`Settings -> Buttplug.io`).
-- **Deep Integration**: Hooks directly into video lifecycle events (play, pause, seek, timeupdate) for instant responsiveness.
-- **Multi-Device Support**: Controls Linear (Strokers), Vibration, and Rotation devices simultaneously.
-- **Smart Fallbacks**: Generates vibration and rotation commands from linear strokes if specific scripts are missing.
-- **Standalone**: Runs entirely in the browser using the latest `Buttplug.io` client, keeping your Stash installation lean.
+This plugin connects StashApp to Buttplug.io (Intiface) to control devices like the Kiiroo Keon, vibrators, and rotators using Funscripts synced with your scenes. 
 
 ## Installation
 
