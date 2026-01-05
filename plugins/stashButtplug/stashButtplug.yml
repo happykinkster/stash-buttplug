@@ -18,31 +18,39 @@ settings:
     type: STRING
     displayName: Server URL
     description: The address of your Intiface Central server (e.g. ws://localhost:12345)
+    default: ws://localhost:12345
   latency:
     type: NUMBER
     displayName: Latency (ms)
     description: Adjust timing synchronization (negative to speed up, positive to delay)
+    default: 20
   autoConnect:
     type: BOOLEAN
     displayName: Auto-Connect
     description: Automatically connect to Intiface when a video starts playing
+    default: true
   updateRate:
     type: NUMBER
     displayName: Update Rate (Hz)
     description: Frequency of commands sent to devices (default 20Hz, typical for Bluetooth)
+    default: 20
   interpolationType:
     type: STRING
     displayName: Interpolation Type
     description: "Smoothing method: Linear, Pchip, or Makima"
+    default: "Linear"
   enableSpeedLimit:
     type: BOOLEAN
     displayName: Enable Speed Limit
     description: "Smoothed movement by limiting maximum speed"
+    default: false
   speedLimitCount:
     type: NUMBER
     displayName: Speed Limit (Units/Sec)
     description: "Max units (0-100) per second. Lower = smoother/slower."
+    default: 100
   intensity:
     type: NUMBER
     displayName: Intensity (Gain)
     description: "Multiplies movement values. >1.0 amplifies low-range scripts."
+    default: 1.0
