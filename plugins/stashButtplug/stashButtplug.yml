@@ -30,3 +30,27 @@ settings:
     type: NUMBER
     displayName: Update Rate (Hz)
     description: Frequency of commands sent to devices (default 20Hz, typical for Bluetooth)
+  interpolationType:
+    type: STRING
+    displayName: Interpolation Type
+    description: algorithm to use for smoothing (Linear, Pchip, Makima)
+    default: Linear
+    options:
+      - Linear
+      - Pchip
+      - Makima
+  enableSpeedLimit:
+    type: BOOLEAN
+    displayName: Enable Speed Limit
+    description: smoothed movement by limiting maximum speed
+    default: false
+  speedLimitCount:
+    type: NUMBER
+    displayName: Speed Limit (Units/Sec)
+    description: Max units (0-100) per second. Lower = smoother/slower.
+    default: 100
+  intensity:
+    type: NUMBER
+    displayName: Intensity (Gain)
+    description: Multiplies movement values. >1.0 amplifies low-range scripts.
+    default: 1.0
