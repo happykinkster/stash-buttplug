@@ -42,6 +42,17 @@ Located at the bottom of **Settings -> Interface**:
 - **Latency**: Adjust timing synchronization (ms) to compensate for network or device delay.
 - **Auto-Connect**: When enabled, playing a video will automatically attempt to connect to Buttplug if not already connected.
 - **Update Rate (Hz)**: Frequency of commands sent to devices. Default is **20Hz** (recommended for Bluetooth). Increase to **60Hz** for wired devices if you want maximum precision.
+- **Interpolation Type**: Smoothing algorithm for funscript movement.
+    - **Linear** (Default): Direct movement between points.
+    - **Pchip**: Monotone cubic interpolation. Smoother, more natural movement.
+    - **Makima**: Modified Akima interpolation. Smooth but follows rapid changes better.
+    - *Note*: You can type these case-insensitively (e.g. `pchip` or `PCHIP`).
+- **Enable Speed Limit**: Softens jerky movements by capping the maximum speed the device can move. Useful for smoothing out low-quality scripts.
+    - **Speed Limit (Units/Sec)**: The maximum speed limit (0-100). Lower values (e.g. 50) result in smoother, slower motion.
+- **Intensity (Gain)**: Multiplier to increase or decrease the overall stroke length/strength.
+    - **1.0** = Normal (100%).
+    - **> 1.0** = Amplify (e.g. `1.5` boosts a 50% stroke to 75%).
+    - **< 1.0** = Reduce (e.g. `0.8` reduces intensity to 80%).
 
 ## Troubleshooting
 
