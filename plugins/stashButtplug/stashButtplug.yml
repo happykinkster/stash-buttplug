@@ -43,6 +43,6 @@ settings:
     displayName: Speed Limit (Units/Sec)
     description: "Max units (0-100) per second. Lower = smoother/slower."
   intensity:
-    type: NUMBER
+    type: STRING
     displayName: Intensity (Gain)
-    description: "Multiplies movement values. >1.0 amplifies low-range scripts."
+    description: "Multiplies movement values (e.g. 1.5). >1.0 amplifies."
