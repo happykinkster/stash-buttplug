@@ -352,8 +352,12 @@
             let finalPos = Number(pos) / 100;
 
             // 0. Intensity (Gain)
-            if (this._config.intensity && this._config.intensity !== 1.0) {
-                finalPos = MathUtils.clamp01(finalPos * Number(this._config.intensity));
+            if (this._config.intensity) {
+                let intensityVal = String(this._config.intensity).replace(',', '.');
+                let gain = Number(intensityVal);
+                if (!isNaN(gain) && gain > 0) {
+                    finalPos = MathUtils.clamp01(finalPos * gain);
+                }
             }
 
             const now = Date.now();
