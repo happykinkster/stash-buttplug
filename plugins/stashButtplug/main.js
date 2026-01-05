@@ -142,9 +142,9 @@
 
                 if (p0.at !== p1.at) {
                     const t = convertRange(at, p0.at + this._offset, p1.at + this._offset, 0, 1);
-                    const type = this._interpolationType || "Linear";
+                    const type = (this._interpolationType || "Linear").toLowerCase();
 
-                    if (type === "Pchip") {
+                    if (type === "pchip") {
                         // Need 4 points: p-1, p0, p1, p2
                         const pm1 = this.getAction(this._actionIndex - 1) || { at: p0.at - (p1.at - p0.at), pos: p0.pos }; // naive extrapolate
                         const pp1 = this.getAction(this._actionIndex + 1) || { at: p1.at + (p1.at - p0.at), pos: p1.pos };
@@ -164,7 +164,7 @@
                         const slopes = MathUtils.pchipSlopes(tm1, pm1.pos, t0, p0.pos, t1, p1.pos, tp1, pp1.pos);
                         pos = MathUtils.cubicHermite(t0, p0.pos, t1, p1.pos, slopes[0], slopes[1], at);
 
-                    } else if (type === "Makima") {
+                    } else if (type === "makima") {
                         // Need 6 points: p-2, p-1, p0, p1, p2, p3
                         const pm1 = this.getAction(this._actionIndex - 1) || { at: p0.at - (p1.at - p0.at), pos: p0.pos };
                         const pm2 = this.getAction(this._actionIndex - 2) || { at: pm1.at - (p0.at - pm1.at), pos: pm1.pos };

@@ -31,13 +31,9 @@ settings:
     displayName: Update Rate (Hz)
     description: Frequency of commands sent to devices (default 20Hz, typical for Bluetooth)
   interpolationType:
-    type: SELECT
+    type: STRING
     displayName: Interpolation Type
-    description: "Method used for smoothing (Linear, Pchip, Makima)"
-    options:
-      - Linear
-      - Pchip
-      - Makima
+    description: "Smoothing method: Linear, Pchip, or Makima"
   enableSpeedLimit:
     type: BOOLEAN
     displayName: Enable Speed Limit
