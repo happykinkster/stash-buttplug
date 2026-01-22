@@ -389,7 +389,7 @@
                         await device.vibrate(finalPos).catch(() => { });
                     }
                     if (device.linearAttributes?.length > 0) {
-                        const duration = Math.round(1000 / (this._config.updateRate || 20));
+                        const duration = Math.round(1000 / (this._config.updateRate || 20)) + 60;
                         await device.linear(finalPos, duration).catch(() => { });
                     }
                     if (device.rotateAttributes?.length > 0) {
