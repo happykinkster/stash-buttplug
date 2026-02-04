@@ -242,12 +242,12 @@
             let isAtEndOfActions = this._actionIndex >= (this._funscript.actions.length - 1);
             if (isAtEndOfActions) return false;
 
-            do {
+            while ((currAt >= (currAction.at + this._offset)) && !isAtEndOfActions) {
                 this._prevAction = currAction;
                 this._actionIndex++;
                 currAction = this._funscript.actions[this._actionIndex];
                 isAtEndOfActions = this._actionIndex >= this._funscript.actions.length - 1;
-            } while ((currAt < (this._prevAction.at + this._offset)) && !isAtEndOfActions);
+            }
 
             return currAt < (currAction.at + this._offset);
         }
@@ -433,11 +433,13 @@
 
     // --- 4. Video lifecycle ---
     let currentVideo = null;
+    let currentSceneId = null;
     function hookVideo() {
         const v = document.querySelector('video');
-        if (v && v !== currentVideo) {
+        const id = window.location.pathname.match(/\/scenes\/(\d+)/)?.[1];
+        if (v && (v !== currentVideo || id !== currentSceneId)) {
             currentVideo = v;
-            const id = window.location.pathname.match(/\/scenes\/(\d+)/)?.[1];
+            currentSceneId = id;
             if (id) manager.uploadScript(`/scene/${id}/funscript`);
             v.onplaying = () => manager.play(v.currentTime);
             v.onpause = () => manager.pause();
