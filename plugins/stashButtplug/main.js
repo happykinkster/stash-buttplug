@@ -355,8 +355,9 @@
             if (this._config.intensity) {
                 let intensityVal = String(this._config.intensity).replace(',', '.');
                 let gain = Number(intensityVal);
-                if (!isNaN(gain) && gain > 0) {
-                    finalPos = MathUtils.clamp01(finalPos * gain);
+                if (!isNaN(gain) && gain > 0 && gain !== 1) {
+                    // Center the gain around 50% so it stretches the stroke symmetrically
+                    finalPos = MathUtils.clamp01((finalPos - 0.5) * gain + 0.5);
                 }
             }
 
